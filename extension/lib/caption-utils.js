@@ -231,6 +231,27 @@
     return String(languageCode || "").toLowerCase().split("-")[0] === "vi";
   }
 
+  function getReadFrogSubtitlesView(documentRoot) {
+    const host = documentRoot?.getElementById?.("read-frog-subtitles-ui-host");
+    return host?.shadowRoot?.querySelector?.(".read-frog-subtitles-view") || null;
+  }
+
+  function readReadFrogTranslation(documentRoot) {
+    const translation = getReadFrogSubtitlesView(documentRoot)?.querySelector?.(
+      ".subtitles-translation"
+    );
+    if (!translation || translation.isConnected === false) {
+      return "";
+    }
+    if (
+      typeof translation.getClientRects === "function" &&
+      translation.getClientRects().length === 0
+    ) {
+      return "";
+    }
+    return cleanCaptionText(translation.textContent || "");
+  }
+
   function selectCaptionTrack(tracks, preferVietnamese = true) {
     const available = (tracks || []).map(normaliseTrack).filter((track) => track.baseUrl);
     if (!available.length) {
@@ -263,6 +284,7 @@
     cleanCaptionText,
     decodeEntities,
     extractBalancedJson,
+    getReadFrogSubtitlesView,
     getRenderer,
     isVietnamese,
     makeTimedTextUrl,
@@ -271,6 +293,7 @@
     parsePlayerResponseScripts,
     parseTranscriptPayload,
     parseXml,
+    readReadFrogTranslation,
     selectCaptionTrack
   };
 });

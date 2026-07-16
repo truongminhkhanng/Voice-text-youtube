@@ -37,6 +37,8 @@ Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lạ
 - Tự nhận bản auto-translate tiếng Việt đang bật trong YouTube (`tlang=vi`) và đọc trực tiếp, không cần API key.
 - Nếu API nội bộ vẫn báo track gốc như `en-GB`, lấy chính dòng phụ đề đang hiển thị trên video; vì vậy bản auto-translate Việt trên màn hình không bị thay bằng câu tiếng Anh.
 - Chỉ đọc trạng thái player và tài nguyên phụ đề đã có; extension không gọi `setOption`, không bật/tắt CC và không tự click mở panel của YouTube.
+- Cài interceptor read-only ở `document_start` để giữ URL `timedtext` có PO token, rồi dựng request JSON3 với thông tin client của player — cùng chiến lược ổn định đã được kiểm chứng khi phân tích hành vi Read Frog.
+- Nếu Read Frog đang hiển thị bản dịch, ưu tiên đọc `.subtitles-translation` trong open Shadow DOM của nó; không truy cập storage, API key hay mã nội bộ của extension khác.
 
 Floating control chưa nằm trong phiên bản hiện tại.
 

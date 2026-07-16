@@ -128,11 +128,15 @@
       ? `${Math.min(state.currentIndex + (state.playback === "speaking" ? 1 : 0), state.totalCues)}/${state.totalCues}`
       : "";
     elements.trackMeta.hidden = !state.trackName && !state.displayedCaptionMode;
-    elements.trackMeta.textContent = state.displayedCaptionMode
-      ? "Nguồn đọc: phụ đề đang hiển thị trên YouTube"
-      : state.trackName
+    if (state.displayedCaptionSource === "read-frog") {
+      elements.trackMeta.textContent = "Nguồn đọc: bản dịch đang hiển thị của Read Frog";
+    } else if (state.displayedCaptionMode) {
+      elements.trackMeta.textContent = "Nguồn đọc: phụ đề đang hiển thị trên YouTube";
+    } else {
+      elements.trackMeta.textContent = state.trackName
         ? `Track: ${state.trackName} · ${state.languageCode || "không rõ ngôn ngữ"}`
-      : "";
+        : "";
+    }
     elements.currentCue.hidden = !state.currentCue;
     elements.currentCueText.textContent = state.currentCue || "";
     elements.retryButton.hidden = !hasActionableError && state.phase !== "error";

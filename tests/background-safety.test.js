@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const pageRuntimeSource = ["background.js", "content.js"]
+const pageRuntimeSource = ["background.js", "content.js", "interceptor.js"]
   .map((file) => fs.readFileSync(path.join(__dirname, "..", "extension", file), "utf8"))
   .join("\n");
 

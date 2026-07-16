@@ -28,6 +28,7 @@
     totalCues: 0,
     currentCue: "",
     displayedCaptionMode: false,
+    displayedCaptionSource: "",
     vietnameseVoiceCount: 0,
     voiceCount: 0
   };
@@ -48,13 +49,21 @@
       } else if (patch.videoPaused) {
         patch.message = "Video đang tạm dừng; giọng đọc đang chờ.";
       } else if (patch.playback === "speaking" && patch.waitingForCue) {
-        patch.message = state.displayedCaptionMode
-          ? "Đang chờ dòng phụ đề tiếp theo trên YouTube…"
-          : "Đang chờ đúng mốc phụ đề tiếp theo…";
+        if (state.displayedCaptionSource === "read-frog") {
+          patch.message = "Đang chờ câu dịch tiếp theo từ Read Frog…";
+        } else if (state.displayedCaptionMode) {
+          patch.message = "Đang chờ dòng phụ đề tiếp theo trên YouTube…";
+        } else {
+          patch.message = "Đang chờ đúng mốc phụ đề tiếp theo…";
+        }
       } else if (patch.playback === "speaking") {
-        patch.message = state.displayedCaptionMode
-          ? "Đang đọc đúng dòng phụ đề hiện trên YouTube…"
-          : "Đang đọc đồng bộ theo video…";
+        if (state.displayedCaptionSource === "read-frog") {
+          patch.message = "Đang đọc bản dịch đang hiện của Read Frog…";
+        } else if (state.displayedCaptionMode) {
+          patch.message = "Đang đọc đúng dòng phụ đề hiện trên YouTube…";
+        } else {
+          patch.message = "Đang đọc đồng bộ theo video…";
+        }
       }
       if (patch.clearCue) {
         patch.currentCue = "";
@@ -78,12 +87,25 @@
   function captionsAreDisplayed() {
     const captionsButton = document.querySelector(".ytp-subtitles-button");
     return (
+      Boolean(getReadFrogSubtitlesView()) ||
       captionsButton?.getAttribute("aria-pressed") === "true" ||
       Boolean(document.querySelector(".ytp-caption-window-container .ytp-caption-segment"))
     );
   }
 
+  function getReadFrogSubtitlesView() {
+    return captions.getReadFrogSubtitlesView(document);
+  }
+
+  function readReadFrogTranslationText() {
+    return captions.readReadFrogTranslation(document);
+  }
+
   function readDisplayedCaptionText() {
+    const readFrogTranslation = readReadFrogTranslationText();
+    if (readFrogTranslation) {
+      return readFrogTranslation;
+    }
     const segments = Array.from(
       document.querySelectorAll(".ytp-caption-window-container .ytp-caption-segment")
     ).filter((segment) => segment.isConnected && segment.getClientRects().length > 0);
@@ -176,9 +198,11 @@
       throw makeError("VIDEO_NOT_FOUND", "Không tìm thấy trình phát video YouTube để đồng bộ giọng đọc.");
     }
 
-    const readFromYouTubeDisplay =
-      captionsAreDisplayed() && !captions.isVietnamese(state.languageCode);
-    const displayedTextProvider = readFromYouTubeDisplay
+    const visibleReadFrogTranslation = readReadFrogTranslationText();
+    const displayedCaptionSource = visibleReadFrogTranslation ? "read-frog" : "youtube";
+    const readFromDisplay = Boolean(visibleReadFrogTranslation) ||
+      (captionsAreDisplayed() && !captions.isVietnamese(state.languageCode));
+    const displayedTextProvider = readFromDisplay
       ? ({ cue, video: activeVideo }) => {
           const elapsedMs = Number(activeVideo.currentTime) * 1000 - Number(cue.startMs || 0);
           const settleMs = Math.min(120, Math.max(0, Number(cue.durationMs || 0) / 3));
@@ -187,10 +211,13 @@
       : null;
     ttsEngine.configure(settings);
     setState({
-      message: readFromYouTubeDisplay
-        ? "Đang đọc đúng dòng phụ đề hiện trên YouTube…"
+      message: readFromDisplay
+        ? displayedCaptionSource === "read-frog"
+          ? "Đang đọc bản dịch đang hiện của Read Frog…"
+          : "Đang đọc đúng dòng phụ đề hiện trên YouTube…"
         : "Đang đồng bộ giọng đọc theo phụ đề của video…",
-      displayedCaptionMode: readFromYouTubeDisplay,
+      displayedCaptionMode: readFromDisplay,
+      displayedCaptionSource: readFromDisplay ? displayedCaptionSource : "",
       errorCode: ""
     });
     ttsEngine.playTimeline(video, voice, displayedTextProvider);
@@ -341,6 +368,7 @@
       sourceLanguageCode: "",
       translated: false,
       displayedCaptionMode: false,
+      displayedCaptionSource: "",
       trackName: "",
       currentCue: "",
       errorCode: ""
@@ -414,6 +442,7 @@
             ? `Bản dịch YouTube từ ${track.name}`
             : track.name,
         displayedCaptionMode: false,
+        displayedCaptionSource: "",
         errorCode: "",
         playback: "stopped",
         currentIndex: 0,

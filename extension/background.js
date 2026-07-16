@@ -48,6 +48,33 @@ function extractMainWorldPlayerData() {
       activeCaptionTrack?.lang ||
       ""
   );
+  const activeCaptionVssId = String(
+    activeCaptionTrack?.vssId || activeCaptionTrack?.vss_id || ""
+  );
+  let audioCaptionTracks = [];
+  try {
+    audioCaptionTracks = (player?.getAudioTrack?.()?.captionTracks || []).flatMap((track) => {
+      try {
+        const url = new URL(String(track?.url || ""), location.origin).toString();
+        return [{
+          url,
+          vssId: String(track?.vssId || track?.vss_id || ""),
+          kind: String(track?.kind || ""),
+          languageCode: new URL(url).searchParams.get("lang") || ""
+        }];
+      } catch (error) {
+        return [];
+      }
+    });
+  } catch (error) {
+    audioCaptionTracks = [];
+  }
+  let capturedTimedTextUrls = [];
+  try {
+    capturedTimedTextUrls = globalThis.__YT_TTS_TIMEDTEXT_CAPTURE__?.list(currentVideoId) || [];
+  } catch (error) {
+    capturedTimedTextUrls = [];
+  }
   const activeCaptionTranslationLanguageCode = String(
     activeCaptionTrack?.translationLanguage?.languageCode ||
       activeCaptionTrack?.translationLanguage?.language_code ||
@@ -79,6 +106,39 @@ function extractMainWorldPlayerData() {
   } catch (error) {
     activeResourceLanguageCode = "";
   }
+  const tracks = (renderer?.captionTracks || []).flatMap((track) => {
+    try {
+      return [{
+        baseUrl: track?.baseUrl
+          ? String(new URL(String(track.baseUrl), location.origin))
+          : "",
+        languageCode: String(track?.languageCode || ""),
+        kind: String(track?.kind || ""),
+        vssId: String(track?.vssId || track?.vss_id || ""),
+        name:
+          track?.name?.simpleText ||
+          track?.name?.runs?.map((run) => run?.text || "").join("") ||
+          track?.languageCode ||
+          "Unknown",
+        isTranslatable: Boolean(track?.isTranslatable),
+        isDefault: Boolean(track?.isDefault)
+      }];
+    } catch (error) {
+      return [];
+    }
+  });
+  let device = "";
+  let cver = "";
+  let playerState = -1;
+  try {
+    device = globalThis.ytcfg?.get?.("DEVICE") || "";
+    cver = player?.getWebPlayerContextConfig?.()?.innertubeContextClientVersion || "";
+    playerState = player?.getPlayerState?.() ?? -1;
+  } catch (error) {
+    device = "";
+    cver = "";
+    playerState = -1;
+  }
 
   return {
     videoId: chosen?.videoDetails?.videoId || currentVideoId,
@@ -90,19 +150,14 @@ function extractMainWorldPlayerData() {
     ),
     activeCaptionLanguageCode,
     activeCaptionTranslationLanguageCode,
+    activeCaptionVssId,
     activeResourceLanguageCode,
-    tracks: (renderer?.captionTracks || []).map((track) => ({
-      baseUrl: String(track?.baseUrl || ""),
-      languageCode: String(track?.languageCode || ""),
-      kind: String(track?.kind || ""),
-      name:
-        track?.name?.simpleText ||
-        track?.name?.runs?.map((run) => run?.text || "").join("") ||
-        track?.languageCode ||
-        "Unknown",
-      isTranslatable: Boolean(track?.isTranslatable),
-      isDefault: Boolean(track?.isDefault)
-    }))
+    audioCaptionTracks,
+    capturedTimedTextUrls,
+    device,
+    cver,
+    playerState,
+    tracks
   };
 }
 
@@ -133,7 +188,12 @@ async function fetchCaptionInPage(url) {
   };
 }
 
-async function fetchCaptionThroughPlayer(videoId, preferredLanguageCode, targetLanguageCode) {
+async function fetchCaptionThroughPlayer(
+  videoId,
+  preferredLanguageCode,
+  targetLanguageCode,
+  requestedTrackUrl
+) {
   const player = document.getElementById("movie_player");
   if (!player) {
     return { ok: false, text: "", source: "player", reason: "PLAYER_NOT_FOUND" };
@@ -143,69 +203,196 @@ async function fetchCaptionThroughPlayer(videoId, preferredLanguageCode, targetL
   const preferredLanguage = normaliseLanguage(preferredLanguageCode);
   const targetLanguage = normaliseLanguage(targetLanguageCode);
   const desiredLanguage = targetLanguage || preferredLanguage;
+  const response = player.getPlayerResponse?.();
+  const rawTracks = response?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+  const tracks = rawTracks.flatMap((track) => {
+    try {
+      if (!track?.baseUrl) return [];
+      return [{
+        baseUrl: new URL(String(track.baseUrl), location.origin).toString(),
+        languageCode: String(track.languageCode || ""),
+        kind: String(track.kind || ""),
+        vssId: String(track.vssId || track.vss_id || "")
+      }];
+    } catch (error) {
+      return [];
+    }
+  });
+  let activeTrack = {};
+  try {
+    activeTrack = player.getOption?.("captions", "track") || {};
+  } catch (error) {
+    activeTrack = {};
+  }
+  const activeVssId = String(activeTrack?.vssId || activeTrack?.vss_id || "");
+  const selectedTrack =
+    tracks.find((track) => activeVssId && track.vssId === activeVssId) ||
+    tracks.find((track) => normaliseLanguage(track.languageCode) === preferredLanguage) ||
+    tracks[0] ||
+    null;
 
-  async function tryTimedTextEntries() {
-    const entries = performance
+  function readObservedUrls() {
+    let capturedUrls = [];
+    let audioTrackUrls = [];
+    try {
+      capturedUrls = (globalThis.__YT_TTS_TIMEDTEXT_CAPTURE__?.list(videoId) || [])
+        .map((item) => item.url)
+        .filter(Boolean);
+    } catch (error) {
+      capturedUrls = [];
+    }
+    try {
+      audioTrackUrls = (player.getAudioTrack?.()?.captionTracks || [])
+        .map((track) => String(track?.url || ""))
+        .filter(Boolean);
+    } catch (error) {
+      audioTrackUrls = [];
+    }
+    const performanceUrls = performance
       .getEntriesByType("resource")
       .map((entry) => entry.name)
       .filter((name) => name.includes("/api/timedtext"))
       .reverse();
-
-    const ranked = entries.sort((left, right) => {
-      const score = (rawUrl) => {
-        try {
-          const url = new URL(rawUrl);
-          let value = 0;
-          if (url.searchParams.get("v") === videoId) value += 8;
-          if (normaliseLanguage(url.searchParams.get("lang")) === preferredLanguage) value += 4;
-          if (normaliseLanguage(url.searchParams.get("tlang")) === targetLanguage) value += 16;
-          if (url.searchParams.has("pot")) value += 2;
-          return value;
-        } catch (error) {
-          return 0;
-        }
-      };
-      return score(right) - score(left);
-    });
-
-    for (const rawUrl of ranked) {
+    return [...capturedUrls, ...performanceUrls, ...audioTrackUrls].filter((rawUrl) => {
       try {
-        const url = new URL(rawUrl);
-        if (url.searchParams.get("v") && url.searchParams.get("v") !== videoId) continue;
-        const effectiveLanguage = normaliseLanguage(
-          url.searchParams.get("tlang") || url.searchParams.get("lang")
-        );
-        if (desiredLanguage && effectiveLanguage !== desiredLanguage) continue;
-        url.searchParams.set("fmt", "json3");
-        const response = await fetch(url, {
-          credentials: "include",
-          headers: { Accept: "application/json, text/xml;q=0.9, */*;q=0.8" }
-        });
-        const text = await response.text();
-        if (response.ok && text) {
-          return {
-            ok: true,
-            status: response.status,
-            contentType: response.headers.get("content-type") || "",
-            text,
-            source: "player-po-token",
-            languageCode: effectiveLanguage
-          };
-        }
+        const candidateVideoId = new URL(rawUrl, location.origin).searchParams.get("v");
+        return !candidateVideoId || candidateVideoId === videoId;
       } catch (error) {
-        // Try another resource entry.
+        return false;
       }
-    }
-    return null;
+    });
   }
 
-  const existing = await tryTimedTextEntries();
-  if (existing) return existing;
+  let allObservedUrls = readObservedUrls();
+  const captionsEnabled =
+    Boolean(activeTrack?.languageCode || activeTrack?.language_code) ||
+    document.querySelector(".ytp-subtitles-button")?.getAttribute("aria-pressed") === "true" ||
+    Boolean(document.querySelector(".ytp-caption-window-container .ytp-caption-segment"));
+  for (let attempt = 0; attempt < 10 && captionsEnabled; attempt += 1) {
+    const hasPoToken = allObservedUrls.some((rawUrl) => {
+      try {
+        return new URL(rawUrl, location.origin).searchParams.has("pot");
+      } catch (error) {
+        return false;
+      }
+    });
+    if (hasPoToken) break;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    allObservedUrls = readObservedUrls();
+  }
+  const scoreUrl = (rawUrl) => {
+    try {
+      const url = new URL(rawUrl, location.origin);
+      let score = 0;
+      const effectiveLanguage = normaliseLanguage(
+        url.searchParams.get("tlang") || url.searchParams.get("lang")
+      );
+      if (url.searchParams.get("v") === videoId) score += 16;
+      if (effectiveLanguage === desiredLanguage) score += 12;
+      if (normaliseLanguage(url.searchParams.get("lang")) === preferredLanguage) score += 4;
+      if (url.searchParams.has("pot")) score += 8;
+      if (url.searchParams.has("potc")) score += 2;
+      return score;
+    } catch (error) {
+      return -1;
+    }
+  };
+  allObservedUrls.sort((left, right) => scoreUrl(right) - scoreUrl(left));
+  const poTokenUrl = allObservedUrls.find((rawUrl) => {
+    try {
+      return new URL(rawUrl, location.origin).searchParams.has("pot");
+    } catch (error) {
+      return false;
+    }
+  });
+
+  const device = new URLSearchParams(String(globalThis.ytcfg?.get?.("DEVICE") || ""));
+  const clientVersion = String(
+    player.getWebPlayerContextConfig?.()?.innertubeContextClientVersion || ""
+  );
+  const clientParameters = {
+    fmt: "json3",
+    xorb: "2",
+    xobt: "3",
+    xovt: "3",
+    c: "WEB",
+    cplayer: "UNIPLAYER"
+  };
+  const deviceKeys = ["cbrand", "cbr", "cbrver", "cos", "cosver", "cplatform"];
+
+  function buildCandidate(rawUrl) {
+    const url = new URL(rawUrl, location.origin);
+    if (url.pathname !== "/api/timedtext") return null;
+    if (url.searchParams.get("v") && url.searchParams.get("v") !== videoId) return null;
+    for (const [key, value] of Object.entries(clientParameters)) {
+      url.searchParams.set(key, value);
+    }
+    for (const key of deviceKeys) {
+      const value = device.get(key);
+      if (value) url.searchParams.set(key, value);
+    }
+    if (clientVersion) url.searchParams.set("cver", clientVersion);
+    if (targetLanguage) {
+      url.searchParams.set("tlang", targetLanguageCode);
+    }
+    if (poTokenUrl) {
+      const tokenSource = new URL(poTokenUrl, location.origin);
+      const poToken = tokenSource.searchParams.get("pot");
+      const poTokenContext = tokenSource.searchParams.get("potc");
+      if (poToken && !url.searchParams.has("pot")) url.searchParams.set("pot", poToken);
+      if (poTokenContext && !url.searchParams.has("potc")) {
+        url.searchParams.set("potc", poTokenContext);
+      }
+    }
+    return url.toString();
+  }
+
+  const baseCandidates = [
+    ...allObservedUrls,
+    requestedTrackUrl,
+    selectedTrack?.baseUrl
+  ].filter(Boolean);
+  const candidates = [...new Set(baseCandidates.flatMap((rawUrl) => {
+    try {
+      const candidate = buildCandidate(rawUrl);
+      return candidate ? [candidate] : [];
+    } catch (error) {
+      return [];
+    }
+  }))];
+
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate);
+      const effectiveLanguage = normaliseLanguage(
+        url.searchParams.get("tlang") || url.searchParams.get("lang")
+      );
+      if (desiredLanguage && effectiveLanguage !== desiredLanguage) continue;
+      const captionResponse = await fetch(url, {
+        credentials: "include",
+        headers: { Accept: "application/json, text/xml;q=0.9, */*;q=0.8" }
+      });
+      const text = await captionResponse.text();
+      if (captionResponse.ok && text) {
+        return {
+          ok: true,
+          status: captionResponse.status,
+          contentType: captionResponse.headers.get("content-type") || "",
+          text,
+          source: url.searchParams.has("pot") ? "captured-po-token" : "player-resource",
+          languageCode: effectiveLanguage
+        };
+      }
+    } catch (error) {
+      // Try the next captured or reconstructed URL without changing YouTube player state.
+    }
+  }
+
   return {
     ok: false,
     text: "",
-    source: "player-resource-readonly",
-    reason: "NO_EXISTING_TOKENISED_RESOURCE"
+    source: "captured-resource-readonly",
+    reason: candidates.length ? "CAPTION_RESPONSES_EMPTY" : "NO_CAPTURED_RESOURCE"
   };
 }
 
@@ -334,7 +521,8 @@ async function fetchCaptions(message, sender) {
         args: [
           message.videoId || "",
           message.languageCode || "",
-          message.targetLanguageCode || ""
+          message.targetLanguageCode || "",
+          message.url || ""
         ]
       });
       return results[0]?.result;
