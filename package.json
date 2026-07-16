@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test",
     "validate": "node scripts/validate-extension.js",
+    "package:unpacked": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1",
     "preview": "node scripts/serve-static.js",
     "smoke:youtube": "node scripts/smoke-youtube.js"
   }

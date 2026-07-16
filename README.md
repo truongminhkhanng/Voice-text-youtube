@@ -2,13 +2,22 @@
 
 Chrome Extension Manifest V3 lấy phụ đề của video YouTube, ưu tiên track tiếng Việt, dịch khi người dùng chủ động cấu hình và đọc tuần tự bằng giọng Web Speech có sẵn trên máy.
 
-## Cài đặt bản development
+## Cài để sử dụng riêng trên Chrome
 
 1. Mở `chrome://extensions`.
 2. Bật **Developer mode**.
-3. Chọn **Load unpacked** và trỏ tới thư mục `extension` trong dự án này.
-4. Mở hoặc tải lại một trang video `youtube.com/watch?v=...`.
-5. Click icon extension, đợi trạng thái **Sẵn sàng**, rồi chọn **Phát**.
+3. Chọn **Load unpacked**.
+4. Chọn **thư mục gốc `Voice-text-youtube`** — chính là thư mục đang chứa file `manifest.json` này.
+5. Mở hoặc tải lại một trang video `youtube.com/watch?v=...`.
+6. Click icon extension, đợi trạng thái **Sẵn sàng**, rồi chọn **Phát**.
+
+Bạn cũng có thể tạo một bản sạch chỉ chứa file cần cho Chrome:
+
+```powershell
+npm run package:unpacked
+```
+
+Sau đó chọn thư mục `release/YT-Auto-Translate-TTS-unpacked` trong **Load unpacked**. File ZIP bên cạnh dùng để lưu trữ hoặc chép sang máy khác; cần giải nén ZIP trước khi chọn trong Chrome.
 
 Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lại tab YouTube để content script mới được nạp.
 

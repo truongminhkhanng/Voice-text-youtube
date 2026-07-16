@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "YT Auto Translate + TTS (Vietnamese)",
+  "version": "1.0.0",
+  "description": "Lấy phụ đề YouTube, dịch sang tiếng Việt và đọc bằng giọng có sẵn trên máy.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://translation.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "extension/background.js"
+  },
+  "action": {
+    "default_popup": "extension/popup.html",
+    "default_title": "YT Auto Translate + TTS",
+    "default_icon": {
+      "16": "extension/icons/icon16.png",
+      "48": "extension/icons/icon48.png",
+      "128": "extension/icons/icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "extension/options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://youtube.com/*"
+      ],
+      "js": [
+        "extension/shared.js",
+        "extension/lib/caption-utils.js",
+        "extension/lib/tts-engine.js",
+        "extension/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "extension/icons/icon16.png",
+    "48": "extension/icons/icon48.png",
+    "128": "extension/icons/icon128.png"
+  }
+}
