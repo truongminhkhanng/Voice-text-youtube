@@ -50,6 +50,7 @@
       this.video = null;
       this.timelineTimer = null;
       this.timelineHandlers = null;
+      this.timelineTextProvider = null;
       this.activeCueIndex = -1;
       this.videoWasPaused = false;
     }
@@ -91,7 +92,7 @@
       this.speakNext(runId);
     }
 
-    playTimeline(video, voice) {
+    playTimeline(video, voice, textProvider = null) {
       if (!this.queue.length) {
         throw new Error("Chưa có phụ đề để đọc.");
       }
@@ -100,12 +101,14 @@
       }
 
       if (this.status === "speaking" && this.mode === "timeline" && this.video === video) {
+        this.timelineTextProvider = typeof textProvider === "function" ? textProvider : null;
         this.syncToTimeline();
         return;
       }
 
       if (this.status === "paused" && this.mode === "timeline" && this.video === video) {
         this.voice = voice || this.voice;
+        this.timelineTextProvider = typeof textProvider === "function" ? textProvider : null;
         this.cancelActiveCue();
         this.speechSynthesis.resume();
         this.videoWasPaused = false;
@@ -119,6 +122,7 @@
       this.mode = "timeline";
       this.video = video;
       this.voice = voice;
+      this.timelineTextProvider = typeof textProvider === "function" ? textProvider : null;
       this.status = "speaking";
       this.runId += 1;
       this.attachTimeline();
@@ -151,6 +155,7 @@
       this.videoWasPaused = false;
       this.status = "stopped";
       this.mode = "sequential";
+      this.timelineTextProvider = null;
       this.emitState();
     }
 
@@ -284,8 +289,24 @@
 
     speakTimelineCue(cueIndex) {
       const cue = this.queue[cueIndex];
+      let spokenCue = cue;
+      if (this.timelineTextProvider) {
+        let displayedText = "";
+        try {
+          displayedText = String(
+            this.timelineTextProvider({ cue, index: cueIndex, video: this.video }) || ""
+          ).trim();
+        } catch (error) {
+          displayedText = "";
+        }
+        if (!displayedText) {
+          return;
+        }
+        spokenCue = { ...cue, text: displayedText };
+      }
+
       const token = ++this.utteranceToken;
-      const utterance = new this.Utterance(cue.text);
+      const utterance = new this.Utterance(spokenCue.text);
       const videoRate = Number(this.video?.playbackRate) || 1;
       utterance.rate = clamp(this.settings.rate * videoRate, 0.5, 2);
       utterance.volume = this.settings.volume;
@@ -302,7 +323,7 @@
         if (!this.isCurrentTimelineUtterance(token, cueIndex)) {
           return;
         }
-        this.onCue({ cue, index: cueIndex });
+        this.onCue({ cue: spokenCue, index: cueIndex });
         this.emitState({ waitingForCue: false });
       };
       utterance.onend = () => {
@@ -349,6 +370,7 @@
       this.videoWasPaused = false;
       this.status = "stopped";
       this.mode = "sequential";
+      this.timelineTextProvider = null;
       this.emitState({ completed: true });
     }
 
@@ -360,6 +382,7 @@
       this.videoWasPaused = false;
       this.status = "stopped";
       this.mode = "sequential";
+      this.timelineTextProvider = null;
       this.emitState({ error });
     }
 

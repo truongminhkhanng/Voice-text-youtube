@@ -28,10 +28,19 @@ function extractMainWorldPlayerData() {
     null;
   const renderer = chosen?.captions?.playerCaptionsTracklistRenderer;
   let activeCaptionTrack = {};
+  let activeTranslationLanguage = {};
   try {
     activeCaptionTrack = player?.getOption?.("captions", "track") || {};
   } catch (error) {
     activeCaptionTrack = {};
+  }
+  try {
+    activeTranslationLanguage =
+      player?.getOption?.("captions", "translationLanguage") ||
+      player?.getOption?.("captions", "translation_language") ||
+      {};
+  } catch (error) {
+    activeTranslationLanguage = {};
   }
   const activeCaptionLanguageCode = String(
     activeCaptionTrack?.languageCode ||
@@ -44,6 +53,9 @@ function extractMainWorldPlayerData() {
       activeCaptionTrack?.translationLanguage?.language_code ||
       activeCaptionTrack?.translationLanguageCode ||
       activeCaptionTrack?.tlang ||
+      activeTranslationLanguage?.languageCode ||
+      activeTranslationLanguage?.language_code ||
+      (typeof activeTranslationLanguage === "string" ? activeTranslationLanguage : "") ||
       ""
   );
   let activeResourceLanguageCode = "";

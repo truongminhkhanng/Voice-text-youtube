@@ -127,9 +127,11 @@
     elements.cueProgress.textContent = state.totalCues
       ? `${Math.min(state.currentIndex + (state.playback === "speaking" ? 1 : 0), state.totalCues)}/${state.totalCues}`
       : "";
-    elements.trackMeta.hidden = !state.trackName;
-    elements.trackMeta.textContent = state.trackName
-      ? `Track: ${state.trackName} · ${state.languageCode || "không rõ ngôn ngữ"}`
+    elements.trackMeta.hidden = !state.trackName && !state.displayedCaptionMode;
+    elements.trackMeta.textContent = state.displayedCaptionMode
+      ? "Nguồn đọc: phụ đề đang hiển thị trên YouTube"
+      : state.trackName
+        ? `Track: ${state.trackName} · ${state.languageCode || "không rõ ngôn ngữ"}`
       : "";
     elements.currentCue.hidden = !state.currentCue;
     elements.currentCueText.textContent = state.currentCue || "";

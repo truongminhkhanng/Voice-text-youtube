@@ -27,6 +27,7 @@
     currentIndex: 0,
     totalCues: 0,
     currentCue: "",
+    displayedCaptionMode: false,
     vietnameseVoiceCount: 0,
     voiceCount: 0
   };
@@ -47,9 +48,13 @@
       } else if (patch.videoPaused) {
         patch.message = "Video đang tạm dừng; giọng đọc đang chờ.";
       } else if (patch.playback === "speaking" && patch.waitingForCue) {
-        patch.message = "Đang chờ đúng mốc phụ đề tiếp theo…";
+        patch.message = state.displayedCaptionMode
+          ? "Đang chờ dòng phụ đề tiếp theo trên YouTube…"
+          : "Đang chờ đúng mốc phụ đề tiếp theo…";
       } else if (patch.playback === "speaking") {
-        patch.message = "Đang đọc đồng bộ theo video…";
+        patch.message = state.displayedCaptionMode
+          ? "Đang đọc đúng dòng phụ đề hiện trên YouTube…"
+          : "Đang đọc đồng bộ theo video…";
       }
       if (patch.clearCue) {
         patch.currentCue = "";
@@ -68,6 +73,21 @@
 
   function currentVideoId() {
     return new URL(location.href).searchParams.get("v") || "";
+  }
+
+  function captionsAreDisplayed() {
+    const captionsButton = document.querySelector(".ytp-subtitles-button");
+    return (
+      captionsButton?.getAttribute("aria-pressed") === "true" ||
+      Boolean(document.querySelector(".ytp-caption-window-container .ytp-caption-segment"))
+    );
+  }
+
+  function readDisplayedCaptionText() {
+    const segments = Array.from(
+      document.querySelectorAll(".ytp-caption-window-container .ytp-caption-segment")
+    ).filter((segment) => segment.isConnected && segment.getClientRects().length > 0);
+    return captions.cleanCaptionText(segments.map((segment) => segment.textContent || "").join(" "));
   }
 
   function publicState() {
@@ -156,9 +176,24 @@
       throw makeError("VIDEO_NOT_FOUND", "Không tìm thấy trình phát video YouTube để đồng bộ giọng đọc.");
     }
 
+    const readFromYouTubeDisplay =
+      captionsAreDisplayed() && !captions.isVietnamese(state.languageCode);
+    const displayedTextProvider = readFromYouTubeDisplay
+      ? ({ cue, video: activeVideo }) => {
+          const elapsedMs = Number(activeVideo.currentTime) * 1000 - Number(cue.startMs || 0);
+          const settleMs = Math.min(120, Math.max(0, Number(cue.durationMs || 0) / 3));
+          return elapsedMs < settleMs ? "" : readDisplayedCaptionText();
+        }
+      : null;
     ttsEngine.configure(settings);
-    setState({ message: "Đang đồng bộ giọng đọc theo phụ đề của video…", errorCode: "" });
-    ttsEngine.playTimeline(video, voice);
+    setState({
+      message: readFromYouTubeDisplay
+        ? "Đang đọc đúng dòng phụ đề hiện trên YouTube…"
+        : "Đang đồng bộ giọng đọc theo phụ đề của video…",
+      displayedCaptionMode: readFromYouTubeDisplay,
+      errorCode: ""
+    });
+    ttsEngine.playTimeline(video, voice, displayedTextProvider);
     return publicState();
   }
 
@@ -305,6 +340,7 @@
       languageCode: "",
       sourceLanguageCode: "",
       translated: false,
+      displayedCaptionMode: false,
       trackName: "",
       currentCue: "",
       errorCode: ""
@@ -377,6 +413,7 @@
           : translatedByYouTube
             ? `Bản dịch YouTube từ ${track.name}`
             : track.name,
+        displayedCaptionMode: false,
         errorCode: "",
         playback: "stopped",
         currentIndex: 0,

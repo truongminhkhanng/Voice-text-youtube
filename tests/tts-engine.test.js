@@ -140,6 +140,38 @@ test("TtsEngine follows video timestamps and never reads the next cue early", ()
   assert.equal(synth.paused, false, "stop must leave speech synthesis ready for the next play");
 });
 
+test("TtsEngine can read the translated caption currently displayed by YouTube", () => {
+  const synth = createSynth();
+  const spokenCues = [];
+  const video = createVideo();
+  let displayedCaption = "";
+  const engine = new TtsEngine({
+    speechSynthesis: synth,
+    Utterance: FakeUtterance,
+    timelineIntervalMs: 60_000,
+    onCue: ({ cue }) => spokenCues.push(cue.text)
+  });
+  engine.setQueue([
+    { startMs: 0, durationMs: 2000, text: "that you create inside your design in Bricks." }
+  ]);
+  engine.playTimeline(
+    video,
+    { voiceURI: "vi", lang: "vi-VN" },
+    () => displayedCaption
+  );
+
+  assert.equal(synth.spoken.length, 0, "must wait when YouTube has not rendered the caption yet");
+
+  displayedCaption = "mà bạn tạo trong thiết kế của mình trên Bricks.";
+  engine.syncToTimeline();
+  assert.equal(synth.spoken.length, 1);
+  assert.equal(synth.spoken[0].text, displayedCaption);
+  synth.spoken[0].onstart();
+  assert.deepEqual(spokenCues, [displayedCaption]);
+
+  engine.stop();
+});
+
 test("TtsEngine stops synchronized playback when the video ends", () => {
   const synth = createSynth();
   const states = [];
