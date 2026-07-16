@@ -36,6 +36,7 @@ Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lạ
 - Dịch tùy chọn qua Google Cloud Translation Basic v2 bằng API key riêng của người dùng.
 - Tự nhận bản auto-translate tiếng Việt đang bật trong YouTube (`tlang=vi`) và đọc trực tiếp, không cần API key.
 - Nếu API nội bộ vẫn báo track gốc như `en-GB`, lấy chính dòng phụ đề đang hiển thị trên video; vì vậy bản auto-translate Việt trên màn hình không bị thay bằng câu tiếng Anh.
+- Chỉ đọc trạng thái player và tài nguyên phụ đề đã có; extension không gọi `setOption`, không bật/tắt CC và không tự click mở panel của YouTube.
 
 Floating control chưa nằm trong phiên bản hiện tại.
 

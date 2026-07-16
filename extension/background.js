@@ -139,7 +139,6 @@ async function fetchCaptionThroughPlayer(videoId, preferredLanguageCode, targetL
     return { ok: false, text: "", source: "player", reason: "PLAYER_NOT_FOUND" };
   }
 
-  performance.setResourceTimingBufferSize?.(5000);
   const normaliseLanguage = (value) => String(value || "").toLowerCase().split("-")[0];
   const preferredLanguage = normaliseLanguage(preferredLanguageCode);
   const targetLanguage = normaliseLanguage(targetLanguageCode);
@@ -202,81 +201,15 @@ async function fetchCaptionThroughPlayer(videoId, preferredLanguageCode, targetL
 
   const existing = await tryTimedTextEntries();
   if (existing) return existing;
-
-  let previousTrack = null;
-  let changedTrack = false;
-  try {
-    player.loadModule?.("captions");
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    previousTrack = player.getOption?.("captions", "track") || {};
-    const rawTrackList = player.getOption?.("captions", "tracklist") || [];
-    const trackList = Array.isArray(rawTrackList)
-      ? rawTrackList
-      : rawTrackList.captionTracks || rawTrackList.tracks || [];
-    const trackLanguage = (track) =>
-      normaliseLanguage(track?.languageCode || track?.language_code || track?.lang);
-    const selectedTrack =
-      trackList.find((track) => trackLanguage(track) === preferredLanguage) ||
-      trackList[0] ||
-      { languageCode: preferredLanguageCode };
-    let requestedTrack = selectedTrack;
-    if (targetLanguage && targetLanguage !== trackLanguage(selectedTrack)) {
-      const rawTranslationLanguages =
-        player.getOption?.("captions", "translationLanguages") ||
-        rawTrackList.translationLanguages ||
-        [];
-      const translationLanguages = Array.isArray(rawTranslationLanguages)
-        ? rawTranslationLanguages
-        : rawTranslationLanguages.languages || [];
-      const translationLanguage =
-        translationLanguages.find(
-          (language) =>
-            normaliseLanguage(language?.languageCode || language?.language_code) === targetLanguage
-        ) || { languageCode: targetLanguageCode };
-      requestedTrack = { ...selectedTrack, translationLanguage };
-    }
-
-    const effectiveTrackLanguage = (track) =>
-      normaliseLanguage(
-        track?.translationLanguage?.languageCode ||
-          track?.translationLanguage?.language_code ||
-          track?.translationLanguageCode ||
-          track?.tlang ||
-          track?.languageCode ||
-          track?.language_code ||
-          track?.lang
-      );
-
-    if (effectiveTrackLanguage(previousTrack) === desiredLanguage) {
-      player.setOption?.("captions", "track", {});
-      await new Promise((resolve) => setTimeout(resolve, 80));
-    }
-    player.setOption?.("captions", "track", requestedTrack);
-    changedTrack = true;
-
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      const result = await tryTimedTextEntries();
-      if (result) return result;
-    }
-  } catch (error) {
-    return { ok: false, text: "", source: "player", reason: error?.message || "PLAYER_ERROR" };
-  } finally {
-    if (changedTrack) {
-      try {
-        player.setOption?.("captions", "track", previousTrack || {});
-      } catch (error) {
-        // Restoring the user's caption choice is best-effort only.
-      }
-    }
-  }
-
-  return { ok: false, text: "", source: "player", reason: "NO_TOKENISED_RESOURCE" };
+  return {
+    ok: false,
+    text: "",
+    source: "player-resource-readonly",
+    reason: "NO_EXISTING_TOKENISED_RESOURCE"
+  };
 }
 
 async function extractTranscriptPanelCues() {
-  const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-
   function cleanText(value) {
     return String(value || "").replace(/\s+/g, " ").trim();
   }
@@ -363,30 +296,11 @@ async function extractTranscriptPanelCues() {
   cues = readDom();
   if (cues.length) return { ok: true, cues, source: "transcript-panel-dom" };
 
-  const expandButton = document.querySelector(
-    "ytd-text-inline-expander #expand, #description-inline-expander #expand, tp-yt-paper-button#expand"
-  );
-  expandButton?.click();
-  if (expandButton) await wait(250);
-
-  const transcriptButton = document.querySelector(
-    "ytd-video-description-transcript-section-renderer button, ytd-video-description-transcript-section-renderer tp-yt-paper-button"
-  );
-  transcriptButton?.click();
-
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await wait(250);
-    cues = readAttachedData();
-    if (cues.length) return { ok: true, cues, source: "transcript-panel-data" };
-    cues = readDom();
-    if (cues.length) return { ok: true, cues, source: "transcript-panel-dom" };
-  }
-
   return {
     ok: false,
     cues: [],
-    source: "transcript-panel",
-    reason: transcriptButton ? "PANEL_EMPTY" : "BUTTON_NOT_FOUND"
+    source: "transcript-panel-readonly",
+    reason: "PANEL_NOT_AVAILABLE"
   };
 }
 
