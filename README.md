@@ -31,14 +31,14 @@ Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lạ
 - Play, Pause/Resume và Stop (phát lại từ vị trí video hiện tại).
 - Chọn giọng, tốc độ 0.5–2.0×, âm lượng và auto-play.
 - Lưu tùy chọn bằng `chrome.storage.sync`.
-- Cảnh báo rõ khi thiếu caption, endpoint timedtext lỗi hoặc máy không có giọng `vi-*`.
-- Khi YouTube yêu cầu PO Token, thử lại URL do player tạo và fallback sang panel **Hiện bản chép lời**.
+- Cảnh báo rõ khi video không có caption hoặc máy không có giọng `vi-*`.
+- Chế độ tương thích không click CC, không mở menu, không đổi track và không quan sát/chặn request bằng `webRequest`.
+- Khi YouTube đang hiển thị bản dịch native tiếng Việt, đọc trực tiếp đúng dòng đang chạy mà không gửi thêm request caption.
+- Nếu YouTube chưa chọn tiếng Việt, hướng dẫn người dùng chọn **Phụ đề → Dịch tự động → Tiếng Việt**; không đọc nhầm dòng tiếng Anh bằng giọng Việt.
 - Dịch tùy chọn qua Google Cloud Translation Basic v2 bằng API key riêng của người dùng.
-- Tự nhận bản auto-translate tiếng Việt đang bật trong YouTube (`tlang=vi`) và đọc trực tiếp, không cần API key.
-- Nếu API nội bộ vẫn báo track gốc như `en-GB`, lấy chính dòng phụ đề đang hiển thị trên video; vì vậy bản auto-translate Việt trên màn hình không bị thay bằng câu tiếng Anh.
-- Chỉ đọc trạng thái player và tài nguyên phụ đề đã có; extension không gọi `setOption`, không bật/tắt CC và không tự click mở panel của YouTube.
-- Cài interceptor read-only ở `document_start` để giữ URL `timedtext` có PO token, rồi dựng request JSON3 với thông tin client của player — cùng chiến lược ổn định đã được kiểm chứng khi phân tích hành vi Read Frog.
-- Nếu Read Frog đang hiển thị bản dịch, ưu tiên đọc `.subtitles-translation` trong open Shadow DOM của nó; không truy cập storage, API key hay mã nội bộ của extension khác.
+- Không gửi request `tlang=vi` riêng và không cố điều khiển bản dịch native của YouTube.
+- Không gọi `setOption`, không thay caption track, không mở panel transcript và không click nút CC native.
+- Hoạt động độc lập, không đọc DOM, storage, API key hay mã của bất kỳ extension nào khác.
 
 Floating control chưa nằm trong phiên bản hiện tại.
 
@@ -64,7 +64,7 @@ Danh sách giọng phụ thuộc hệ điều hành. Nếu `speechSynthesis.getV
 ## Kiến trúc
 
 - `content.js`: lifecycle của video, caption, dịch và TTS DOM.
-- `background.js`: service worker điều phối tab, đọc player data ở MAIN world và thực hiện network request.
+- `background.js`: service worker điều phối tab, đọc player data ở MAIN world và chỉ tải caption nguồn khi người dùng chủ động bật dịch Google.
 - `popup.*`: điều khiển nhanh và trạng thái tab hiện tại.
 - `options.*`: cấu hình đầy đủ và API key cục bộ.
 - `lib/`: parser caption, hàng đợi TTS và chia lô dịch có thể unit test.
@@ -81,7 +81,7 @@ npm run validate
 npm run smoke:youtube
 ```
 
-`smoke:youtube` cần Internet và kiểm tra một video công khai. Nếu YouTube chặn timedtext ngoài page context, test sẽ báo `inconclusive`; extension thật còn thử lại request trong MAIN world của tab. Có thể truyền video ID khác bằng `node scripts/smoke-youtube.js VIDEO_ID`.
+`smoke:youtube` cần Internet và kiểm tra một video công khai. Nếu YouTube chặn timedtext ngoài page context, test sẽ báo `inconclusive`; extension thật còn thử lại trong MAIN world và có chế độ đọc CC trực tiếp. Có thể truyền video ID khác bằng `node scripts/smoke-youtube.js VIDEO_ID`.
 
 Tạo lại icon PNG:
 

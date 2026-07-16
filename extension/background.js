@@ -1,7 +1,11 @@
 /* global YtTtsCaptionUtils, YtTtsShared, YtTtsTranslationUtils */
 "use strict";
 
-importScripts("shared.js", "lib/caption-utils.js", "lib/translation-utils.js");
+importScripts(
+  "shared.js",
+  "lib/caption-utils.js",
+  "lib/translation-utils.js"
+);
 
 const { DEFAULT_SETTINGS, MESSAGE } = YtTtsShared;
 
@@ -69,12 +73,6 @@ function extractMainWorldPlayerData() {
   } catch (error) {
     audioCaptionTracks = [];
   }
-  let capturedTimedTextUrls = [];
-  try {
-    capturedTimedTextUrls = globalThis.__YT_TTS_TIMEDTEXT_CAPTURE__?.list(currentVideoId) || [];
-  } catch (error) {
-    capturedTimedTextUrls = [];
-  }
   const activeCaptionTranslationLanguageCode = String(
     activeCaptionTrack?.translationLanguage?.languageCode ||
       activeCaptionTrack?.translationLanguage?.language_code ||
@@ -85,27 +83,6 @@ function extractMainWorldPlayerData() {
       (typeof activeTranslationLanguage === "string" ? activeTranslationLanguage : "") ||
       ""
   );
-  let activeResourceLanguageCode = "";
-  try {
-    const timedTextUrls = performance
-      .getEntriesByType("resource")
-      .map((entry) => entry.name)
-      .filter((name) => name.includes("/api/timedtext"))
-      .reverse()
-      .filter((name) => {
-        const url = new URL(name);
-        return !url.searchParams.get("v") || url.searchParams.get("v") === currentVideoId;
-      });
-    const recentTimedTextUrl =
-      timedTextUrls.find((name) => new URL(name).searchParams.has("tlang")) || timedTextUrls[0];
-    if (recentTimedTextUrl) {
-      const url = new URL(recentTimedTextUrl);
-      activeResourceLanguageCode =
-        url.searchParams.get("tlang") || url.searchParams.get("lang") || "";
-    }
-  } catch (error) {
-    activeResourceLanguageCode = "";
-  }
   const tracks = (renderer?.captionTracks || []).flatMap((track) => {
     try {
       return [{
@@ -145,15 +122,13 @@ function extractMainWorldPlayerData() {
     title: chosen?.videoDetails?.title || document.title.replace(/\s+-\s+YouTube$/, ""),
     playabilityReason: chosen?.playabilityStatus?.reason || "",
     captionIsActive: Boolean(
-      activeCaptionLanguageCode ||
+      document.querySelector(".ytp-subtitles-button")?.getAttribute("aria-pressed") === "true" ||
         document.querySelector(".ytp-caption-window-container .ytp-caption-segment")
     ),
     activeCaptionLanguageCode,
     activeCaptionTranslationLanguageCode,
     activeCaptionVssId,
-    activeResourceLanguageCode,
     audioCaptionTracks,
-    capturedTimedTextUrls,
     device,
     cver,
     playerState,
@@ -191,7 +166,6 @@ async function fetchCaptionInPage(url) {
 async function fetchCaptionThroughPlayer(
   videoId,
   preferredLanguageCode,
-  targetLanguageCode,
   requestedTrackUrl
 ) {
   const player = document.getElementById("movie_player");
@@ -201,8 +175,7 @@ async function fetchCaptionThroughPlayer(
 
   const normaliseLanguage = (value) => String(value || "").toLowerCase().split("-")[0];
   const preferredLanguage = normaliseLanguage(preferredLanguageCode);
-  const targetLanguage = normaliseLanguage(targetLanguageCode);
-  const desiredLanguage = targetLanguage || preferredLanguage;
+  const desiredLanguage = preferredLanguage;
   const response = player.getPlayerResponse?.();
   const rawTracks = response?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
   const tracks = rawTracks.flatMap((track) => {
@@ -232,15 +205,7 @@ async function fetchCaptionThroughPlayer(
     null;
 
   function readObservedUrls() {
-    let capturedUrls = [];
     let audioTrackUrls = [];
-    try {
-      capturedUrls = (globalThis.__YT_TTS_TIMEDTEXT_CAPTURE__?.list(videoId) || [])
-        .map((item) => item.url)
-        .filter(Boolean);
-    } catch (error) {
-      capturedUrls = [];
-    }
     try {
       audioTrackUrls = (player.getAudioTrack?.()?.captionTracks || [])
         .map((track) => String(track?.url || ""))
@@ -253,7 +218,7 @@ async function fetchCaptionThroughPlayer(
       .map((entry) => entry.name)
       .filter((name) => name.includes("/api/timedtext"))
       .reverse();
-    return [...capturedUrls, ...performanceUrls, ...audioTrackUrls].filter((rawUrl) => {
+    return [...performanceUrls, ...audioTrackUrls].filter((rawUrl) => {
       try {
         const candidateVideoId = new URL(rawUrl, location.origin).searchParams.get("v");
         return !candidateVideoId || candidateVideoId === videoId;
@@ -332,9 +297,6 @@ async function fetchCaptionThroughPlayer(
       if (value) url.searchParams.set(key, value);
     }
     if (clientVersion) url.searchParams.set("cver", clientVersion);
-    if (targetLanguage) {
-      url.searchParams.set("tlang", targetLanguageCode);
-    }
     if (poTokenUrl) {
       const tokenSource = new URL(poTokenUrl, location.origin);
       const poToken = tokenSource.searchParams.get("pot");
@@ -521,30 +483,19 @@ async function fetchCaptions(message, sender) {
         args: [
           message.videoId || "",
           message.languageCode || "",
-          message.targetLanguageCode || "",
           message.url || ""
         ]
       });
       return results[0]?.result;
     };
 
-    if (message.targetLanguageCode) {
-      try {
-        const playerResult = await requestFromPlayer();
-        if (playerResult?.ok && playerResult.text) {
-          return playerResult;
-        }
-      } catch (error) {
-        // Try the original track URL next.
-      }
-    }
-
     try {
+      const requestedPageUrl = new URL(message.url);
       const results = await chrome.scripting.executeScript({
         target: { tabId: sender.tab.id, frameIds: [sender.frameId || 0] },
         world: "MAIN",
         func: fetchCaptionInPage,
-        args: [message.url]
+        args: [requestedPageUrl.toString()]
       });
       const pageResult = results[0]?.result;
       if (pageResult?.ok && pageResult.text) {
@@ -573,7 +524,7 @@ async function fetchCaptions(message, sender) {
       if (transcriptResult?.ok && transcriptResult.cues?.length) {
         return {
           ...transcriptResult,
-          languageCode: message.targetLanguageCode || message.languageCode || ""
+          languageCode: message.languageCode || ""
         };
       }
     } catch (error) {
@@ -581,7 +532,8 @@ async function fetchCaptions(message, sender) {
     }
   }
 
-  const response = await fetch(message.url, {
+  const serviceWorkerUrl = new URL(message.url);
+  const response = await fetch(serviceWorkerUrl, {
     credentials: "include",
     headers: { Accept: "application/json, text/xml;q=0.9, */*;q=0.8" }
   });
@@ -595,10 +547,7 @@ async function fetchCaptions(message, sender) {
     contentType: response.headers.get("content-type") || "",
     text: await response.text(),
     source: "service-worker",
-    languageCode:
-      new URL(message.url).searchParams.get("tlang") ||
-      new URL(message.url).searchParams.get("lang") ||
-      ""
+    languageCode: serviceWorkerUrl.searchParams.get("lang") || ""
   };
 }
 

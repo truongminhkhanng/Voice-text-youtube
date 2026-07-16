@@ -190,3 +190,57 @@ test("TtsEngine stops synchronized playback when the video ends", () => {
   assert.equal(engine.status, "stopped");
   assert.equal(states.at(-1).completed, true);
 });
+
+test("TtsEngine reads live YouTube captions only after they appear", () => {
+  const synth = createSynth();
+  const video = createVideo();
+  let displayedCaption = "";
+  const engine = new TtsEngine({
+    speechSynthesis: synth,
+    Utterance: FakeUtterance,
+    timelineIntervalMs: 60_000,
+    liveCaptionStableMs: 0
+  });
+  engine.configure({ rate: 1.4, volume: 0.7 });
+  engine.playLiveCaptions(
+    video,
+    { voiceURI: "vi", lang: "vi-VN" },
+    () => displayedCaption
+  );
+
+  assert.equal(synth.spoken.length, 0, "must stay silent before YouTube renders a caption");
+
+  displayedCaption = "Xin chào các bạn";
+  video.currentTime = 2.5;
+  engine.syncToTimeline();
+  assert.equal(synth.spoken.length, 1);
+  assert.equal(synth.spoken[0].text, displayedCaption);
+  assert.equal(synth.spoken[0].rate, 1.4);
+
+  engine.syncToTimeline();
+  assert.equal(synth.spoken.length, 1, "must not repeat the same displayed caption");
+  engine.stop();
+});
+
+test("TtsEngine reads only appended words when live automatic captions grow", () => {
+  const synth = createSynth();
+  const video = createVideo();
+  let displayedCaption = "Xin chào";
+  const engine = new TtsEngine({
+    speechSynthesis: synth,
+    Utterance: FakeUtterance,
+    timelineIntervalMs: 60_000,
+    liveCaptionStableMs: 0
+  });
+  engine.playLiveCaptions(video, { voiceURI: "vi", lang: "vi-VN" }, () => displayedCaption);
+  assert.equal(synth.spoken[0].text, "Xin chào");
+
+  displayedCaption = "Xin chào các bạn";
+  engine.syncToTimeline();
+  assert.equal(synth.spoken[1].text, "các bạn");
+
+  displayedCaption = "các bạn đến với video";
+  engine.syncToTimeline();
+  assert.equal(synth.spoken[2].text, "đến với video", "must skip words retained by a rolling caption");
+  engine.stop();
+});

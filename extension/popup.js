@@ -128,9 +128,9 @@
       ? `${Math.min(state.currentIndex + (state.playback === "speaking" ? 1 : 0), state.totalCues)}/${state.totalCues}`
       : "";
     elements.trackMeta.hidden = !state.trackName && !state.displayedCaptionMode;
-    if (state.displayedCaptionSource === "read-frog") {
-      elements.trackMeta.textContent = "Nguồn đọc: bản dịch đang hiển thị của Read Frog";
-    } else if (state.displayedCaptionMode) {
+    if (state.liveCaptionMode && !state.displayedCaptionMode) {
+      elements.trackMeta.textContent = state.trackName || "Đang chờ bản dịch tiếng Việt";
+    } else if (state.displayedCaptionMode || state.liveCaptionMode) {
       elements.trackMeta.textContent = "Nguồn đọc: phụ đề đang hiển thị trên YouTube";
     } else {
       elements.trackMeta.textContent = state.trackName
@@ -141,7 +141,7 @@
     elements.currentCueText.textContent = state.currentCue || "";
     elements.retryButton.hidden = !hasActionableError && state.phase !== "error";
 
-    const ready = state.phase === "ready" && state.totalCues > 0;
+    const ready = state.phase === "ready" && (state.totalCues > 0 || state.liveCaptionMode);
     elements.playButton.disabled = !ready || state.playback === "speaking";
     elements.pauseButton.disabled = state.playback !== "speaking";
     elements.stopButton.disabled = !["speaking", "paused"].includes(state.playback);

@@ -18,7 +18,7 @@ function loadMainWorldFunction(name, nextName, context) {
   return vm.runInNewContext(`(${source.slice(start, end).trim()})`, context);
 }
 
-test("player caption fetch rebuilds a translated JSON3 URL with the observed PO token", async () => {
+test("player caption fetch rebuilds the source JSON3 URL with the observed PO token", async () => {
   const fetchedUrls = [];
   const baseUrl = "https://www.youtube.com/api/timedtext?v=video123&lang=en";
   const player = {
@@ -72,13 +72,13 @@ test("player caption fetch rebuilds a translated JSON3 URL with the observed PO 
     context
   );
 
-  const result = await fetchCaptionThroughPlayer("video123", "en", "vi", baseUrl);
+  const result = await fetchCaptionThroughPlayer("video123", "en", baseUrl);
   const requested = new URL(fetchedUrls[0]);
 
   assert.equal(result.ok, true);
-  assert.equal(result.languageCode, "vi");
+  assert.equal(result.languageCode, "en");
   assert.equal(requested.searchParams.get("fmt"), "json3");
-  assert.equal(requested.searchParams.get("tlang"), "vi");
+  assert.equal(requested.searchParams.has("tlang"), false);
   assert.equal(requested.searchParams.get("pot"), "po-token");
   assert.equal(requested.searchParams.get("potc"), "1");
   assert.equal(requested.searchParams.get("c"), "WEB");

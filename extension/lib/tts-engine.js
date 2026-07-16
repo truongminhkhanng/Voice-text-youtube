@@ -32,13 +32,15 @@
       Utterance,
       onState = () => {},
       onCue = () => {},
-      timelineIntervalMs = 100
+      timelineIntervalMs = 100,
+      liveCaptionStableMs = 120
     }) {
       this.speechSynthesis = speechSynthesis;
       this.Utterance = Utterance;
       this.onState = onState;
       this.onCue = onCue;
       this.timelineIntervalMs = timelineIntervalMs;
+      this.liveCaptionStableMs = liveCaptionStableMs;
       this.queue = [];
       this.index = 0;
       this.status = "stopped";
@@ -51,6 +53,12 @@
       this.timelineTimer = null;
       this.timelineHandlers = null;
       this.timelineTextProvider = null;
+      this.liveCaptionProvider = null;
+      this.liveCaptionCandidate = "";
+      this.liveCaptionCandidateSince = 0;
+      this.liveLastSpokenText = "";
+      this.liveBlankSince = 0;
+      this.liveSequence = 0;
       this.activeCueIndex = -1;
       this.videoWasPaused = false;
     }
@@ -130,18 +138,61 @@
       this.syncToTimeline();
     }
 
+    playLiveCaptions(video, voice, textProvider) {
+      if (!video || !Number.isFinite(Number(video.currentTime))) {
+        throw new Error("Không tìm thấy video để đồng bộ giọng đọc.");
+      }
+      if (typeof textProvider !== "function") {
+        throw new Error("Không đọc được phụ đề đang hiển thị trên YouTube.");
+      }
+
+      if (this.status === "speaking" && this.mode === "live" && this.video === video) {
+        this.liveCaptionProvider = textProvider;
+        this.syncToTimeline();
+        return;
+      }
+
+      if (this.status === "paused" && this.mode === "live" && this.video === video) {
+        this.voice = voice || this.voice;
+        this.liveCaptionProvider = textProvider;
+        this.cancelActiveCue();
+        this.speechSynthesis.resume();
+        this.videoWasPaused = false;
+        this.status = "speaking";
+        this.emitState();
+        this.syncToTimeline();
+        return;
+      }
+
+      this.stop();
+      this.mode = "live";
+      this.video = video;
+      this.voice = voice;
+      this.liveCaptionProvider = textProvider;
+      this.liveCaptionCandidate = "";
+      this.liveCaptionCandidateSince = 0;
+      this.liveLastSpokenText = "";
+      this.liveBlankSince = 0;
+      this.liveSequence = 0;
+      this.status = "speaking";
+      this.runId += 1;
+      this.attachTimeline();
+      this.emitState({ waitingForCue: true });
+      this.syncToTimeline();
+    }
+
     pause() {
       if (this.status !== "speaking") {
         return;
       }
 
-      if (this.mode === "timeline") {
+      if (this.mode === "timeline" || this.mode === "live") {
         this.cancelActiveCue();
       } else {
         this.speechSynthesis.pause();
       }
       this.status = "paused";
-      this.emitState({ waitingForCue: this.mode === "timeline" });
+      this.emitState({ waitingForCue: this.mode === "timeline" || this.mode === "live" });
     }
 
     stop() {
@@ -156,6 +207,10 @@
       this.status = "stopped";
       this.mode = "sequential";
       this.timelineTextProvider = null;
+      this.liveCaptionProvider = null;
+      this.liveCaptionCandidate = "";
+      this.liveLastSpokenText = "";
+      this.liveBlankSince = 0;
       this.emitState();
     }
 
@@ -171,7 +226,7 @@
     attachTimeline() {
       const sync = () => this.syncToTimeline();
       const seeking = () => {
-        if (this.mode !== "timeline" || this.status !== "speaking") {
+        if (!["timeline", "live"].includes(this.mode) || this.status !== "speaking") {
           return;
         }
         this.cancelActiveCue();
@@ -211,7 +266,7 @@
     }
 
     syncToTimeline() {
-      if (this.mode !== "timeline" || this.status !== "speaking" || !this.video) {
+      if (!["timeline", "live"].includes(this.mode) || this.status !== "speaking" || !this.video) {
         return;
       }
 
@@ -235,6 +290,11 @@
         this.emitState({ videoPaused: false });
       }
 
+      if (this.mode === "live") {
+        this.syncLiveCaptions();
+        return;
+      }
+
       const cueIndex = this.findCueIndexAt(Number(this.video.currentTime) * 1000);
       if (cueIndex < 0) {
         if (this.activeCueIndex >= 0) {
@@ -250,6 +310,112 @@
 
       this.cancelActiveCue();
       this.speakTimelineCue(cueIndex);
+    }
+
+    syncLiveCaptions() {
+      let displayedText = "";
+      try {
+        displayedText = String(this.liveCaptionProvider?.() || "").replace(/\s+/g, " ").trim();
+      } catch (error) {
+        displayedText = "";
+      }
+
+      const now = Date.now();
+      if (!displayedText) {
+        if (!this.liveBlankSince) this.liveBlankSince = now;
+        if (now - this.liveBlankSince >= 500) this.liveLastSpokenText = "";
+        if (this.activeCueIndex >= 0) {
+          this.cancelActiveCue();
+          this.emitState({ waitingForCue: true, clearCue: true });
+        }
+        this.liveCaptionCandidate = "";
+        this.liveCaptionCandidateSince = now;
+        return;
+      }
+      this.liveBlankSince = 0;
+
+      if (displayedText !== this.liveCaptionCandidate) {
+        this.liveCaptionCandidate = displayedText;
+        this.liveCaptionCandidateSince = now;
+        if (this.liveCaptionStableMs > 0) return;
+      }
+      if (now - this.liveCaptionCandidateSince < this.liveCaptionStableMs) return;
+      if (displayedText === this.liveLastSpokenText) return;
+
+      let spokenText = displayedText;
+      if (this.liveLastSpokenText && displayedText.startsWith(this.liveLastSpokenText)) {
+        spokenText = displayedText.slice(this.liveLastSpokenText.length).trim();
+      } else if (this.liveLastSpokenText.includes(displayedText)) {
+        return;
+      } else if (this.liveLastSpokenText) {
+        const previousWords = this.liveLastSpokenText.split(/\s+/);
+        const currentWords = displayedText.split(/\s+/);
+        let overlap = 0;
+        for (
+          let size = Math.min(previousWords.length, currentWords.length);
+          size > 0;
+          size -= 1
+        ) {
+          const previousSuffix = previousWords.slice(-size).join(" ");
+          const currentPrefix = currentWords.slice(0, size).join(" ");
+          if (previousSuffix === currentPrefix) {
+            overlap = size;
+            break;
+          }
+        }
+        if (overlap) spokenText = currentWords.slice(overlap).join(" ");
+      }
+      if (!spokenText) return;
+
+      this.cancelActiveCue();
+      this.liveLastSpokenText = displayedText;
+      this.speakLiveCaption(spokenText);
+    }
+
+    speakLiveCaption(text) {
+      const cueIndex = this.liveSequence++;
+      const cue = {
+        startMs: Number(this.video?.currentTime || 0) * 1000,
+        durationMs: 0,
+        text
+      };
+      const token = ++this.utteranceToken;
+      const utterance = new this.Utterance(text);
+      const videoRate = Number(this.video?.playbackRate) || 1;
+      utterance.rate = clamp(this.settings.rate * videoRate, 0.5, 2);
+      utterance.volume = this.settings.volume;
+      if (this.voice) {
+        utterance.voice = this.voice;
+        utterance.lang = this.voice.lang;
+      } else {
+        utterance.lang = "vi-VN";
+      }
+
+      this.activeCueIndex = cueIndex;
+      this.index = cueIndex;
+      utterance.onstart = () => {
+        if (!this.isCurrentLiveUtterance(token, cueIndex)) return;
+        this.onCue({ cue, index: cueIndex });
+        this.emitState({ waitingForCue: false });
+      };
+      utterance.onend = () => {
+        if (!this.isCurrentLiveUtterance(token, cueIndex)) return;
+        this.emitState({ waitingForCue: true });
+      };
+      utterance.onerror = (event) => {
+        if (!this.isCurrentLiveUtterance(token, cueIndex)) return;
+        this.failTimeline(event?.error || "speech-error");
+      };
+      this.speechSynthesis.speak(utterance);
+    }
+
+    isCurrentLiveUtterance(token, cueIndex) {
+      return (
+        this.mode === "live" &&
+        this.status === "speaking" &&
+        token === this.utteranceToken &&
+        cueIndex === this.activeCueIndex
+      );
     }
 
     findCueIndexAt(timeMs) {
@@ -371,6 +537,7 @@
       this.status = "stopped";
       this.mode = "sequential";
       this.timelineTextProvider = null;
+      this.liveCaptionProvider = null;
       this.emitState({ completed: true });
     }
 
@@ -383,6 +550,7 @@
       this.status = "stopped";
       this.mode = "sequential";
       this.timelineTextProvider = null;
+      this.liveCaptionProvider = null;
       this.emitState({ error });
     }
 

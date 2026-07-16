@@ -54,23 +54,3 @@ test("makeTimedTextUrl requests json3 while preserving the signed query", () => 
   assert.equal(url.searchParams.get("fmt"), "json3");
   assert.equal(url.searchParams.get("sig"), "secret");
 });
-
-test("readReadFrogTranslation reads the visible translated line from its open shadow root", () => {
-  const translation = {
-    isConnected: true,
-    textContent: "  Xin chào   các bạn  ",
-    getClientRects: () => [{}]
-  };
-  const view = {
-    querySelector: (selector) => selector === ".subtitles-translation" ? translation : null
-  };
-  const documentRoot = {
-    getElementById: (id) => id === "read-frog-subtitles-ui-host"
-      ? { shadowRoot: { querySelector: () => view } }
-      : null
-  };
-
-  assert.equal(utils.readReadFrogTranslation(documentRoot), "Xin chào các bạn");
-  translation.getClientRects = () => [];
-  assert.equal(utils.readReadFrogTranslation(documentRoot), "");
-});

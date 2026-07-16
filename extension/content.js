@@ -29,37 +29,39 @@
     currentCue: "",
     displayedCaptionMode: false,
     displayedCaptionSource: "",
+    liveCaptionMode: false,
     vietnameseVoiceCount: 0,
     voiceCount: 0
   };
   let transcript = [];
+  let currentCaptionTrack = null;
+  let nativeLanguageMonitorTimer = null;
+  let nativeLanguageMonitorGeneration = 0;
   const ttsEngine = new tts.TtsEngine({
     speechSynthesis: globalThis.speechSynthesis,
     Utterance: SpeechSynthesisUtterance,
     onState(playbackState) {
       const patch = { ...playbackState };
       if (patch.error) {
+        stopNativeLanguageMonitor();
         patch.phase = "ready";
         patch.errorCode = "TTS_FAILED";
         patch.message = `Giọng đọc gặp lỗi: ${patch.error}.`;
       } else if (patch.completed) {
+        stopNativeLanguageMonitor();
         patch.phase = "ready";
         patch.message = "Video đã kết thúc; giọng đọc đã dừng.";
         patch.currentCue = "";
       } else if (patch.videoPaused) {
         patch.message = "Video đang tạm dừng; giọng đọc đang chờ.";
       } else if (patch.playback === "speaking" && patch.waitingForCue) {
-        if (state.displayedCaptionSource === "read-frog") {
-          patch.message = "Đang chờ câu dịch tiếp theo từ Read Frog…";
-        } else if (state.displayedCaptionMode) {
+        if (state.displayedCaptionMode || state.liveCaptionMode) {
           patch.message = "Đang chờ dòng phụ đề tiếp theo trên YouTube…";
         } else {
           patch.message = "Đang chờ đúng mốc phụ đề tiếp theo…";
         }
       } else if (patch.playback === "speaking") {
-        if (state.displayedCaptionSource === "read-frog") {
-          patch.message = "Đang đọc bản dịch đang hiện của Read Frog…";
-        } else if (state.displayedCaptionMode) {
+        if (state.displayedCaptionMode || state.liveCaptionMode) {
           patch.message = "Đang đọc đúng dòng phụ đề hiện trên YouTube…";
         } else {
           patch.message = "Đang đọc đồng bộ theo video…";
@@ -84,28 +86,78 @@
     return new URL(location.href).searchParams.get("v") || "";
   }
 
+  function requiresVietnameseOutput() {
+    return settings.preferVietnamese || settings.translateToVietnamese;
+  }
+
+  function activeNativeLanguageCode(playerData) {
+    return (
+      playerData?.activeCaptionTranslationLanguageCode ||
+      playerData?.activeCaptionLanguageCode ||
+      ""
+    );
+  }
+
+  function stopNativeLanguageMonitor() {
+    nativeLanguageMonitorGeneration += 1;
+    if (nativeLanguageMonitorTimer !== null) {
+      clearTimeout(nativeLanguageMonitorTimer);
+      nativeLanguageMonitorTimer = null;
+    }
+  }
+
+  function startNativeLanguageMonitor(videoId) {
+    stopNativeLanguageMonitor();
+    if (!requiresVietnameseOutput()) return;
+
+    const generation = nativeLanguageMonitorGeneration;
+    const check = async () => {
+      if (
+        generation !== nativeLanguageMonitorGeneration ||
+        currentVideoId() !== videoId ||
+        !state.liveCaptionMode
+      ) {
+        return;
+      }
+
+      try {
+        const playerData = await requestPlayerData(videoId);
+        if (generation !== nativeLanguageMonitorGeneration) return;
+        const activeLanguage = activeNativeLanguageCode(playerData);
+        if (activeLanguage && !captions.isVietnamese(activeLanguage)) {
+          stopNativeLanguageMonitor();
+          ttsEngine.stop();
+          setState({
+            phase: "error",
+            message: "YouTube không còn hiển thị phụ đề tiếng Việt nên giọng đọc đã dừng. Hãy chọn Phụ đề → Dịch tự động → Tiếng Việt, rồi bấm Thử lại.",
+            errorCode: "YOUTUBE_VIETNAMESE_NOT_ACTIVE",
+            liveCaptionMode: false,
+            displayedCaptionMode: false,
+            currentCue: ""
+          });
+          return;
+        }
+      } catch (error) {
+        // A transient read failure must not interrupt speech or alter YouTube.
+      }
+
+      if (generation === nativeLanguageMonitorGeneration) {
+        nativeLanguageMonitorTimer = setTimeout(check, 750);
+      }
+    };
+
+    nativeLanguageMonitorTimer = setTimeout(check, 750);
+  }
+
   function captionsAreDisplayed() {
     const captionsButton = document.querySelector(".ytp-subtitles-button");
     return (
-      Boolean(getReadFrogSubtitlesView()) ||
       captionsButton?.getAttribute("aria-pressed") === "true" ||
       Boolean(document.querySelector(".ytp-caption-window-container .ytp-caption-segment"))
     );
   }
 
-  function getReadFrogSubtitlesView() {
-    return captions.getReadFrogSubtitlesView(document);
-  }
-
-  function readReadFrogTranslationText() {
-    return captions.readReadFrogTranslation(document);
-  }
-
   function readDisplayedCaptionText() {
-    const readFrogTranslation = readReadFrogTranslationText();
-    if (readFrogTranslation) {
-      return readFrogTranslation;
-    }
     const segments = Array.from(
       document.querySelectorAll(".ytp-caption-window-container .ytp-caption-segment")
     ).filter((segment) => segment.isConnected && segment.getClientRects().length > 0);
@@ -159,12 +211,14 @@
 
   async function controlPlayback(action) {
     if (action === "pause") {
+      stopNativeLanguageMonitor();
       ttsEngine.pause();
       setState({ message: "Đã tạm dừng giọng đọc." });
       return publicState();
     }
 
     if (action === "stop") {
+      stopNativeLanguageMonitor();
       ttsEngine.stop();
       setState({ currentCue: "", message: "Đã dừng. Bấm Phát để đọc tại vị trí video hiện tại.", errorCode: "" });
       return publicState();
@@ -174,7 +228,8 @@
       throw makeError("UNKNOWN_COMMAND", "Lệnh điều khiển không hợp lệ.");
     }
 
-    if (!transcript.length) {
+    const useLiveCaptions = state.liveCaptionMode && !transcript.length;
+    if (!transcript.length && !useLiveCaptions) {
       throw makeError("NO_CAPTIONS", state.message || "Chưa có phụ đề để đọc.");
     }
 
@@ -198,29 +253,43 @@
       throw makeError("VIDEO_NOT_FOUND", "Không tìm thấy trình phát video YouTube để đồng bộ giọng đọc.");
     }
 
-    const visibleReadFrogTranslation = readReadFrogTranslationText();
-    const displayedCaptionSource = visibleReadFrogTranslation ? "read-frog" : "youtube";
-    const readFromDisplay = Boolean(visibleReadFrogTranslation) ||
-      (captionsAreDisplayed() && !captions.isVietnamese(state.languageCode));
-    const displayedTextProvider = readFromDisplay
-      ? ({ cue, video: activeVideo }) => {
-          const elapsedMs = Number(activeVideo.currentTime) * 1000 - Number(cue.startMs || 0);
-          const settleMs = Math.min(120, Math.max(0, Number(cue.durationMs || 0) / 3));
-          return elapsedMs < settleMs ? "" : readDisplayedCaptionText();
+    if (useLiveCaptions) {
+      if (!captionsAreDisplayed()) {
+        throw makeError(
+          "CAPTIONS_NOT_VISIBLE",
+          "Hãy tự bật nút CC của YouTube. Extension không tự click hoặc thay đổi phụ đề để tránh xung đột."
+        );
+      }
+      if (requiresVietnameseOutput()) {
+        const latestPlayerData = await requestPlayerData(currentVideoId());
+        const activeNativeLanguage = activeNativeLanguageCode(latestPlayerData);
+        if (!captions.isVietnamese(activeNativeLanguage)) {
+          throw makeError(
+            "YOUTUBE_VIETNAMESE_NOT_ACTIVE",
+            "Hãy chọn Phụ đề → Dịch tự động → Tiếng Việt trên YouTube, rồi bấm Thử lại."
+          );
         }
-      : null;
+      }
+      ttsEngine.configure(settings);
+      setState({
+        message: "Đang đọc đúng dòng phụ đề hiện trên YouTube…",
+        displayedCaptionMode: true,
+        displayedCaptionSource: "youtube",
+        errorCode: ""
+      });
+      ttsEngine.playLiveCaptions(video, voice, readDisplayedCaptionText);
+      startNativeLanguageMonitor(currentVideoId());
+      return publicState();
+    }
+
     ttsEngine.configure(settings);
     setState({
-      message: readFromDisplay
-        ? displayedCaptionSource === "read-frog"
-          ? "Đang đọc bản dịch đang hiện của Read Frog…"
-          : "Đang đọc đúng dòng phụ đề hiện trên YouTube…"
-        : "Đang đồng bộ giọng đọc theo phụ đề của video…",
-      displayedCaptionMode: readFromDisplay,
-      displayedCaptionSource: readFromDisplay ? displayedCaptionSource : "",
+      message: "Đang đồng bộ giọng đọc theo phụ đề của video…",
+      displayedCaptionMode: false,
+      displayedCaptionSource: "",
       errorCode: ""
     });
-    ttsEngine.playTimeline(video, voice, displayedTextProvider);
+    ttsEngine.playTimeline(video, voice);
     return publicState();
   }
 
@@ -268,14 +337,13 @@
     return playerData;
   }
 
-  async function requestTranscript(track, targetLanguageCode = "") {
+  async function requestTranscript(track) {
     const url = captions.makeTimedTextUrl(track.baseUrl);
     const response = await chrome.runtime.sendMessage({
       type: MESSAGE.FETCH_CAPTIONS,
       url,
       videoId: currentVideoId(),
-      languageCode: track.languageCode,
-      targetLanguageCode
+      languageCode: track.languageCode
     });
     if (!response?.ok) {
       throw makeError(
@@ -290,7 +358,7 @@
     if (!cues.length) {
       throw makeError(
         "CAPTION_EMPTY",
-        "YouTube đang yêu cầu PO Token cho phụ đề. Hãy bật nút CC hoặc mở “Hiện bản chép lời” một lần, rồi bấm Thử lại."
+        "YouTube không trả tệp phụ đề; extension sẽ chuyển sang đọc trực tiếp dòng CC đang chạy."
       );
     }
 
@@ -331,7 +399,9 @@
   async function loadCaptions(reason = "navigation") {
     const token = ++navigationToken;
     const videoId = currentVideoId();
+    stopNativeLanguageMonitor();
     transcript = [];
+    currentCaptionTrack = null;
     ttsEngine.setQueue([]);
 
     if (!videoId) {
@@ -343,6 +413,7 @@
         cueCount: 0,
         languageCode: "",
         trackName: "",
+        liveCaptionMode: false,
         errorCode: ""
       });
       return;
@@ -354,6 +425,7 @@
         message: "Extension đang tắt.",
         videoId,
         cueCount: 0,
+        liveCaptionMode: false,
         errorCode: ""
       });
       return;
@@ -369,13 +441,15 @@
       translated: false,
       displayedCaptionMode: false,
       displayedCaptionSource: "",
+      liveCaptionMode: false,
       trackName: "",
       currentCue: "",
       errorCode: ""
     });
 
+    let playerData = null;
     try {
-      const playerData = await waitForPlayerData(videoId, token);
+      playerData = await waitForPlayerData(videoId, token);
       if (token !== navigationToken || videoId !== currentVideoId()) {
         return;
       }
@@ -389,17 +463,72 @@
             : "Video này không cung cấp phụ đề khả dụng."
         );
       }
+      currentCaptionTrack = track;
 
-      const activeYouTubeLanguageCode =
-        playerData.activeCaptionTranslationLanguageCode ||
-        (playerData.captionIsActive ? playerData.activeResourceLanguageCode : "");
+      if (requiresVietnameseOutput()) {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const activeLanguage = activeNativeLanguageCode(playerData);
+          if (captions.isVietnamese(activeLanguage)) break;
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          if (token !== navigationToken || videoId !== currentVideoId()) return;
+          const refreshedPlayerData = await requestPlayerData(videoId);
+          if (refreshedPlayerData?.tracks?.length) playerData = refreshedPlayerData;
+        }
+      }
+
+      const activeYouTubeLanguageCode = activeNativeLanguageCode(playerData);
       const useYouTubeVietnamese = captions.isVietnamese(activeYouTubeLanguageCode);
-      const targetLanguageCode =
-        !captions.isVietnamese(track.languageCode) &&
-        (settings.translateToVietnamese || useYouTubeVietnamese)
-          ? "vi"
-          : "";
-      const transcriptResult = await requestTranscript(track, targetLanguageCode);
+      if (useYouTubeVietnamese) {
+        ttsEngine.setQueue([]);
+        setState({
+          phase: "ready",
+          message: captionsAreDisplayed()
+            ? "YouTube đang hiển thị bản dịch tiếng Việt; sẵn sàng đọc trực tiếp."
+            : "YouTube đã chọn tiếng Việt. Hãy tự bật nút CC rồi bấm Phát.",
+          videoId,
+          videoTitle: playerData.title || "",
+          cueCount: 0,
+          languageCode: "vi",
+          sourceLanguageCode: track.languageCode,
+          captionSource: "youtube-native",
+          youtubeTranslationActive: true,
+          translated: true,
+          trackName: `Bản dịch native YouTube từ ${track.name}`,
+          displayedCaptionMode: true,
+          displayedCaptionSource: "youtube",
+          liveCaptionMode: true,
+          errorCode: "",
+          playback: "stopped",
+          currentIndex: 0,
+          totalCues: 0,
+          currentCue: ""
+        });
+        if (settings.autoPlay && captionsAreDisplayed()) {
+          controlPlayback("play").catch(() => {});
+        }
+        return;
+      }
+      if (settings.preferVietnamese && !settings.translateToVietnamese) {
+        setState({
+          phase: "error",
+          message: "Extension không can thiệp YouTube. Hãy chọn Phụ đề → Dịch tự động → Tiếng Việt, bật CC, rồi bấm Thử lại.",
+          videoId,
+          videoTitle: playerData.title || "",
+          cueCount: 0,
+          languageCode: "",
+          sourceLanguageCode: track.languageCode,
+          trackName: track.name,
+          displayedCaptionMode: false,
+          displayedCaptionSource: "",
+          liveCaptionMode: false,
+          errorCode: "YOUTUBE_VIETNAMESE_NOT_ACTIVE",
+          playback: "stopped",
+          totalCues: 0,
+          currentCue: ""
+        });
+        return;
+      }
+      const transcriptResult = await requestTranscript(track);
       let cues = transcriptResult.cues;
       if (token !== navigationToken || videoId !== currentVideoId()) {
         return;
@@ -435,6 +564,7 @@
         languageCode: finalLanguageCode,
         sourceLanguageCode,
         captionSource: transcriptResult.source,
+        youtubeTranslationActive: translatedByYouTube,
         translated: shouldTranslate || translatedByYouTube,
         trackName: shouldTranslate
           ? `Bản dịch Google từ ${track.name}`
@@ -443,6 +573,7 @@
             : track.name,
         displayedCaptionMode: false,
         displayedCaptionSource: "",
+        liveCaptionMode: false,
         errorCode: "",
         playback: "stopped",
         currentIndex: 0,
@@ -471,6 +602,61 @@
         return;
       }
       transcript = [];
+      if (playerData?.tracks?.length && ["CAPTION_EMPTY", "CAPTION_FETCH_FAILED"].includes(error?.code)) {
+        ttsEngine.setQueue([]);
+        const nativeVietnamese = captions.isVietnamese(activeNativeLanguageCode(playerData));
+        if (!nativeVietnamese && requiresVietnameseOutput()) {
+          setState({
+            phase: "error",
+            message: "Extension không can thiệp YouTube. Hãy chọn Phụ đề → Dịch tự động → Tiếng Việt, bật CC, rồi bấm Thử lại.",
+            cueCount: 0,
+            languageCode: "",
+            liveCaptionMode: false,
+            displayedCaptionMode: false,
+            errorCode: "YOUTUBE_VIETNAMESE_NOT_ACTIVE"
+          });
+          return;
+        }
+        setState({
+          phase: "ready",
+          message: captionsAreDisplayed()
+            ? nativeVietnamese
+              ? "Sẵn sàng đọc trực tiếp từng dòng phụ đề tiếng Việt của YouTube."
+              : "Sẵn sàng đọc trực tiếp từng dòng phụ đề đang hiển thị trên YouTube."
+            : "Hãy tự bật nút CC của YouTube rồi bấm Phát.",
+          videoId,
+          videoTitle: playerData.title || "",
+          cueCount: 0,
+          languageCode: nativeVietnamese ? "vi" : currentCaptionTrack?.languageCode || "",
+          sourceLanguageCode: currentCaptionTrack?.languageCode || "",
+          captionSource: "youtube-live",
+          youtubeTranslationActive: Boolean(
+            playerData.activeCaptionTranslationLanguageCode &&
+              captions.isVietnamese(playerData.activeCaptionTranslationLanguageCode)
+          ),
+          translated: nativeVietnamese,
+          trackName: nativeVietnamese
+            ? "Phụ đề tiếng Việt native của YouTube"
+            : "Phụ đề native của YouTube",
+          displayedCaptionMode: true,
+          displayedCaptionSource: "youtube",
+          liveCaptionMode: true,
+          errorCode: "",
+          playback: "stopped",
+          currentIndex: 0,
+          totalCues: 0,
+          currentCue: ""
+        });
+        if (settings.autoPlay) {
+          controlPlayback("play").catch((playError) => {
+            setState({
+              message: playError?.message || "Chrome chưa cho phép tự động phát giọng đọc.",
+              errorCode: playError?.code || "AUTOPLAY_FAILED"
+            });
+          });
+        }
+        return;
+      }
       setState({
         phase: "error",
         message: error?.message || "Không thể lấy phụ đề.",
