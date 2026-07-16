@@ -42,11 +42,23 @@
         patch.message = `Giọng đọc gặp lỗi: ${patch.error}.`;
       } else if (patch.completed) {
         patch.phase = "ready";
-        patch.message = "Đã đọc hết phụ đề.";
+        patch.message = "Video đã kết thúc; giọng đọc đã dừng.";
+        patch.currentCue = "";
+      } else if (patch.videoPaused) {
+        patch.message = "Video đang tạm dừng; giọng đọc đang chờ.";
+      } else if (patch.playback === "speaking" && patch.waitingForCue) {
+        patch.message = "Đang chờ đúng mốc phụ đề tiếp theo…";
+      } else if (patch.playback === "speaking") {
+        patch.message = "Đang đọc đồng bộ theo video…";
+      }
+      if (patch.clearCue) {
         patch.currentCue = "";
       }
       delete patch.error;
       delete patch.completed;
+      delete patch.videoPaused;
+      delete patch.waitingForCue;
+      delete patch.clearCue;
       setState(patch);
     },
     onCue({ cue, index }) {
@@ -112,7 +124,7 @@
 
     if (action === "stop") {
       ttsEngine.stop();
-      setState({ currentCue: "", message: "Đã dừng. Sẵn sàng đọc lại từ đầu.", errorCode: "" });
+      setState({ currentCue: "", message: "Đã dừng. Bấm Phát để đọc tại vị trí video hiện tại.", errorCode: "" });
       return publicState();
     }
 
@@ -139,9 +151,14 @@
       );
     }
 
+    const video = document.querySelector("video.html5-main-video, video");
+    if (!video) {
+      throw makeError("VIDEO_NOT_FOUND", "Không tìm thấy trình phát video YouTube để đồng bộ giọng đọc.");
+    }
+
     ttsEngine.configure(settings);
-    setState({ message: "Đang đọc phụ đề…", errorCode: "" });
-    ttsEngine.play(voice);
+    setState({ message: "Đang đồng bộ giọng đọc theo phụ đề của video…", errorCode: "" });
+    ttsEngine.playTimeline(video, voice);
     return publicState();
   }
 

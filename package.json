@@ -1,6 +1,6 @@
 {
   "name": "yt-auto-translate-tts-extension",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "Tests and validation for the unpacked Chrome extension.",
   "scripts": {

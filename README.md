@@ -1,6 +1,6 @@
 # YT Auto Translate + TTS (Vietnamese)
 
-Chrome Extension Manifest V3 lấy phụ đề của video YouTube, ưu tiên track tiếng Việt, dịch khi người dùng chủ động cấu hình và đọc tuần tự bằng giọng Web Speech có sẵn trên máy.
+Chrome Extension Manifest V3 lấy phụ đề của video YouTube, ưu tiên track tiếng Việt, dịch khi người dùng chủ động cấu hình và đọc đồng bộ theo timeline video bằng giọng Web Speech có sẵn trên máy.
 
 ## Cài để sử dụng riêng trên Chrome
 
@@ -26,8 +26,9 @@ Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lạ
 - Theo dõi điều hướng SPA của YouTube và tự nạp lại phụ đề cho video mới.
 - Đọc caption track từ player data trong main world, có fallback parser cho script trên trang.
 - Ưu tiên track tiếng Việt thủ công; fallback sang track gốc tốt nhất nếu không có.
-- Đọc tuần tự bằng `window.speechSynthesis` ngay trong content script.
-- Play, Pause/Resume và Stop (Stop quay lại câu đầu).
+- Chỉ đọc câu khi video chạm timestamp tương ứng; không tự đọc trước câu tiếp theo.
+- Tự pause theo video, bỏ câu cũ khi tua và cắt câu còn dở lúc phụ đề kế tiếp bắt đầu để luôn bám timeline.
+- Play, Pause/Resume và Stop (phát lại từ vị trí video hiện tại).
 - Chọn giọng, tốc độ 0.5–2.0×, âm lượng và auto-play.
 - Lưu tùy chọn bằng `chrome.storage.sync`.
 - Cảnh báo rõ khi thiếu caption, endpoint timedtext lỗi hoặc máy không có giọng `vi-*`.
@@ -35,7 +36,7 @@ Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lạ
 - Dịch tùy chọn qua Google Cloud Translation Basic v2 bằng API key riêng của người dùng.
 - Tự nhận bản auto-translate tiếng Việt đang bật trong YouTube (`tlang=vi`) và đọc trực tiếp, không cần API key.
 
-Floating control và đồng bộ chặt theo timeline video chưa nằm trong MVP này.
+Floating control chưa nằm trong phiên bản hiện tại.
 
 ## Dịch sang tiếng Việt
 
@@ -91,12 +92,12 @@ Checklist thủ công quan trọng:
 - video không có caption;
 - máy có/không có giọng Việt;
 - chuyển video bằng điều hướng SPA mà không refresh;
-- pause, resume, stop và phát lại;
+- pause, resume, stop, tua video và phát lại đúng câu tại vị trí hiện tại;
 - API key dịch hợp lệ/không hợp lệ.
 
 ## Giới hạn và quyền riêng tư
 
-YouTube không cung cấp public Caption API dành cho luồng này. Extension dựa vào player data và endpoint `timedtext` không chính thức, vì vậy có thể hỏng khi YouTube thay đổi cấu trúc và cần được bảo trì. Extension không mute video gốc và không cố đồng bộ TTS với từng timestamp trong MVP.
+YouTube không cung cấp public Caption API dành cho luồng này. Extension dựa vào player data và endpoint `timedtext` không chính thức, vì vậy có thể hỏng khi YouTube thay đổi cấu trúc và cần được bảo trì. Extension không mute video gốc. Web Speech không cho biết trước chính xác thời lượng đọc, nên một câu quá dài có thể bị cắt khi phụ đề kế tiếp bắt đầu để tránh làm giọng đọc trễ khỏi video.
 
 Các quyền được dùng:
 

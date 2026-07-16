@@ -30,6 +30,17 @@ function createSynth() {
   };
 }
 
+function createVideo() {
+  return {
+    currentTime: 0,
+    playbackRate: 1,
+    paused: false,
+    ended: false,
+    addEventListener() {},
+    removeEventListener() {}
+  };
+}
+
 test("selectVoice defaults only to a Vietnamese voice", () => {
   const voices = [
     { voiceURI: "en", lang: "en-US" },
@@ -75,4 +86,75 @@ test("TtsEngine pause/resume preserves the queue position and stop resets it", (
   engine.stop();
   assert.equal(engine.index, 0);
   assert.equal(engine.status, "stopped");
+});
+
+test("TtsEngine follows video timestamps and never reads the next cue early", () => {
+  const synth = createSynth();
+  const cues = [];
+  const video = createVideo();
+  const engine = new TtsEngine({
+    speechSynthesis: synth,
+    Utterance: FakeUtterance,
+    timelineIntervalMs: 60_000,
+    onCue: ({ index }) => cues.push(index)
+  });
+  engine.setQueue([
+    { startMs: 1000, durationMs: 500, text: "Một" },
+    { startMs: 2500, durationMs: 700, text: "Hai" }
+  ]);
+  engine.playTimeline(video, { voiceURI: "vi", lang: "vi-VN" });
+
+  assert.equal(synth.spoken.length, 0, "must wait until the first subtitle starts");
+
+  video.currentTime = 1;
+  engine.syncToTimeline();
+  assert.equal(synth.spoken.length, 1);
+  assert.equal(synth.spoken[0].text, "Một");
+  synth.spoken[0].onstart();
+  synth.spoken[0].onend();
+  engine.syncToTimeline();
+  assert.equal(synth.spoken.length, 1, "must not replay or advance while the same cue is active");
+
+  video.currentTime = 1.6;
+  engine.syncToTimeline();
+  assert.equal(synth.spoken.length, 1, "must stay silent in a subtitle gap");
+
+  video.currentTime = 2.5;
+  engine.syncToTimeline();
+  assert.equal(synth.spoken.length, 2);
+  assert.equal(synth.spoken[1].text, "Hai");
+
+  video.paused = true;
+  engine.syncToTimeline();
+  assert.equal(synth.paused, true, "video pause must pause speech synthesis");
+
+  video.paused = false;
+  video.currentTime = 1.1;
+  engine.syncToTimeline();
+  assert.equal(synth.paused, false);
+  assert.equal(synth.spoken.length, 3, "seeking must read the cue at the new video position");
+  assert.equal(synth.spoken[2].text, "Một");
+  assert.deepEqual(cues, [0]);
+
+  engine.stop();
+  assert.equal(synth.paused, false, "stop must leave speech synthesis ready for the next play");
+});
+
+test("TtsEngine stops synchronized playback when the video ends", () => {
+  const synth = createSynth();
+  const states = [];
+  const video = createVideo();
+  const engine = new TtsEngine({
+    speechSynthesis: synth,
+    Utterance: FakeUtterance,
+    timelineIntervalMs: 60_000,
+    onState: (state) => states.push(state)
+  });
+  engine.setQueue([{ startMs: 0, durationMs: 1000, text: "Một" }]);
+  engine.playTimeline(video, { voiceURI: "vi", lang: "vi-VN" });
+  video.ended = true;
+  engine.syncToTimeline();
+
+  assert.equal(engine.status, "stopped");
+  assert.equal(states.at(-1).completed, true);
 });
