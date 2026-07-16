@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YT Auto Translate + TTS</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="brand-mark" aria-hidden="true">
+          <span class="play-shape"></span>
+          <span class="sound-wave">)))</span>
+        </div>
+        <div class="brand-copy">
+          <p class="eyebrow">YOUTUBE ACCESSIBILITY</p>
+          <h1>Phụ đề thành giọng nói</h1>
+        </div>
+        <label class="switch" title="Bật hoặc tắt extension">
+          <input id="enabled" type="checkbox" />
+          <span class="switch-track"></span>
+          <span class="sr-only">Kích hoạt extension</span>
+        </label>
+      </header>
+
+      <section id="statusCard" class="status-card" aria-live="polite">
+        <div class="status-heading">
+          <span id="statusDot" class="status-dot"></span>
+          <span id="statusLabel">Đang kết nối</span>
+          <span id="cueProgress" class="status-progress"></span>
+          <button id="retryButton" class="retry-button" type="button" hidden>Thử lại</button>
+        </div>
+        <p id="statusMessage">Đang đọc trạng thái tab YouTube…</p>
+        <p id="trackMeta" class="track-meta" hidden></p>
+      </section>
+
+      <section class="controls-card" aria-label="Điều khiển giọng đọc">
+        <div class="transport">
+          <button id="playButton" class="transport-button primary" type="button" title="Phát">
+            <span aria-hidden="true">▶</span><span>Phát</span>
+          </button>
+          <button id="pauseButton" class="transport-button" type="button" title="Tạm dừng">
+            <span aria-hidden="true">Ⅱ</span><span>Dừng chờ</span>
+          </button>
+          <button id="stopButton" class="transport-button icon-only" type="button" title="Dừng và về đầu">
+            <span aria-hidden="true">■</span><span class="sr-only">Dừng và về đầu</span>
+          </button>
+        </div>
+
+        <div id="currentCue" class="current-cue" hidden>
+          <span class="cue-label">ĐANG ĐỌC</span>
+          <p id="currentCueText"></p>
+        </div>
+      </section>
+
+      <section class="settings-card" aria-label="Cài đặt nhanh">
+        <label class="field-label" for="voiceSelect">Giọng đọc</label>
+        <select id="voiceSelect">
+          <option value="">Tự động — ưu tiên tiếng Việt</option>
+        </select>
+        <p id="voiceWarning" class="warning" hidden>
+          Máy chưa có giọng tiếng Việt. Hãy cài giọng vi-VN hoặc tự chọn một giọng khác.
+        </p>
+
+        <div class="range-field">
+          <div class="range-heading">
+            <label for="rate">Tốc độ</label>
+            <output id="rateValue" for="rate">1.0×</output>
+          </div>
+          <input id="rate" type="range" min="0.5" max="2" step="0.1" />
+        </div>
+
+        <div class="range-field">
+          <div class="range-heading">
+            <label for="volume">Âm lượng</label>
+            <output id="volumeValue" for="volume">80%</output>
+          </div>
+          <input id="volume" type="range" min="0" max="1" step="0.05" />
+        </div>
+
+        <div class="check-row">
+          <label class="check-item">
+            <input id="autoPlay" type="checkbox" />
+            <span>Đọc tự động khi mở video</span>
+          </label>
+          <label class="check-item">
+            <input id="translateToVietnamese" type="checkbox" />
+            <span>Dịch sang tiếng Việt trước khi đọc</span>
+          </label>
+        </div>
+      </section>
+
+      <footer class="app-footer">
+        <button id="optionsButton" class="text-button" type="button">Cài đặt nâng cao</button>
+        <span id="saveFeedback" role="status"></span>
+        <button id="saveButton" class="save-button" type="button">Lưu thay đổi</button>
+      </footer>
+    </main>
+
+    <script src="shared.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

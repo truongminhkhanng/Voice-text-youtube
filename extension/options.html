@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cài đặt · YT Auto Translate + TTS</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero-inner">
+        <div class="logo" aria-hidden="true"><span></span></div>
+        <div>
+          <p class="kicker">YT AUTO TRANSLATE + TTS</p>
+          <h1>Cài đặt giọng đọc</h1>
+          <p class="intro">Điều chỉnh cách extension lấy, dịch và đọc phụ đề trên YouTube.</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="side-nav" aria-label="Các nhóm cài đặt">
+        <a href="#speech">Giọng đọc</a>
+        <a href="#automation">Tự động hóa</a>
+        <a href="#translation">Dịch phụ đề</a>
+      </nav>
+
+      <form id="settingsForm" class="settings-column">
+        <section id="speech" class="panel">
+          <div class="panel-heading">
+            <span class="step">01</span>
+            <div>
+              <h2>Giọng đọc mặc định</h2>
+              <p>Giọng được cung cấp bởi hệ điều hành và Web Speech API.</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="voiceSelect">Giọng hệ thống</label>
+            <select id="voiceSelect">
+              <option value="">Tự động — ưu tiên tiếng Việt</option>
+            </select>
+            <p id="voiceWarning" class="callout warning" hidden>
+              Không tìm thấy giọng <strong>vi-*</strong>. Extension sẽ không âm thầm dùng giọng Anh;
+              hãy cài gói ngôn ngữ tiếng Việt hoặc tự chọn một giọng khác.
+            </p>
+          </div>
+
+          <div class="slider-grid">
+            <div class="field">
+              <div class="label-row">
+                <label for="rate">Tốc độ</label><output id="rateValue">1.0×</output>
+              </div>
+              <input id="rate" type="range" min="0.5" max="2" step="0.1" />
+              <div class="range-scale"><span>0.5×</span><span>2.0×</span></div>
+            </div>
+            <div class="field">
+              <div class="label-row">
+                <label for="volume">Âm lượng</label><output id="volumeValue">80%</output>
+              </div>
+              <input id="volume" type="range" min="0" max="1" step="0.05" />
+              <div class="range-scale"><span>0%</span><span>100%</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="automation" class="panel">
+          <div class="panel-heading">
+            <span class="step">02</span>
+            <div>
+              <h2>Tự động hóa</h2>
+              <p>Chọn lúc extension được phép chuẩn bị và phát nội dung.</p>
+            </div>
+          </div>
+
+          <label class="toggle-row">
+            <span><strong>Kích hoạt trên YouTube</strong><small>Tự tìm phụ đề khi mở video.</small></span>
+            <input id="enabled" type="checkbox" />
+          </label>
+          <label class="toggle-row">
+            <span><strong>Đọc tự động khi mở video</strong><small>Có thể bị Chrome chặn nếu trang chưa nhận tương tác.</small></span>
+            <input id="autoPlay" type="checkbox" />
+          </label>
+          <label class="toggle-row">
+            <span><strong>Ưu tiên track tiếng Việt</strong><small>Chọn bản thủ công trước bản tạo tự động nếu có.</small></span>
+            <input id="preferVietnamese" type="checkbox" />
+          </label>
+        </section>
+
+        <section id="translation" class="panel">
+          <div class="panel-heading">
+            <span class="step">03</span>
+            <div>
+              <h2>Dịch phụ đề</h2>
+              <p>Chỉ dùng khi video không có track tiếng Việt.</p>
+            </div>
+          </div>
+
+          <label class="toggle-row featured">
+            <span><strong>Dịch sang tiếng Việt trước khi đọc</strong><small>Gửi từng lô phụ đề tới Google Cloud Translation Basic.</small></span>
+            <input id="translateToVietnamese" type="checkbox" />
+          </label>
+
+          <div class="field api-field">
+            <label for="translationApiKey">Google Cloud Translation API key</label>
+            <div class="secret-input">
+              <input id="translationApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…" />
+              <button id="showKeyButton" type="button">Hiện</button>
+            </div>
+            <p class="field-note">
+              Khóa chỉ lưu trong <code>chrome.storage.local</code> trên máy này. Dịch vụ yêu cầu bật
+              billing và có quota/chi phí riêng.
+              <a href="https://cloud.google.com/translate/docs/setup" target="_blank" rel="noreferrer">Hướng dẫn Google Cloud</a>
+            </p>
+          </div>
+
+          <div class="test-row">
+            <button id="testTranslationButton" class="secondary-button" type="button">Lưu và thử dịch “Hello”</button>
+            <span id="translationFeedback" role="status"></span>
+          </div>
+        </section>
+
+        <div class="form-actions">
+          <button id="resetButton" class="ghost-button" type="button">Khôi phục mặc định</button>
+          <span id="saveFeedback" role="status"></span>
+          <button class="primary-button" type="submit">Lưu cài đặt</button>
+        </div>
+      </form>
+    </main>
+
+    <script src="shared.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

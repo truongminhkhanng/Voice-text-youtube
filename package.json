@@ -1,0 +1,12 @@
+{
+  "name": "yt-auto-translate-tts-extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tests and validation for the unpacked Chrome extension.",
+  "scripts": {
+    "test": "node --test",
+    "validate": "node scripts/validate-extension.js",
+    "preview": "node scripts/serve-static.js",
+    "smoke:youtube": "node scripts/smoke-youtube.js"
+  }
+}

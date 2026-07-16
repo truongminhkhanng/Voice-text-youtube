@@ -1,0 +1,11 @@
+node_modules/
+coverage/
+
+.env
+.env.*
+*.crx
+*.pem
+
+.DS_Store
+Thumbs.db
+Desktop.ini
