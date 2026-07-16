@@ -3,7 +3,8 @@ $ErrorActionPreference = "Stop"
 $workspace = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $releaseRoot = [System.IO.Path]::GetFullPath((Join-Path $workspace "release"))
 $unpackedRoot = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "YT-Auto-Translate-TTS-unpacked"))
-$zipPath = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "YT-Auto-Translate-TTS-v1.0.0.zip"))
+$manifestData = Get-Content -LiteralPath (Join-Path $workspace "manifest.json") -Raw | ConvertFrom-Json
+$zipPath = [System.IO.Path]::GetFullPath((Join-Path $releaseRoot "YT-Auto-Translate-TTS-v$($manifestData.version).zip"))
 
 function Assert-InWorkspace {
   param([string]$Candidate)

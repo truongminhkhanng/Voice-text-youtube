@@ -191,7 +191,12 @@
 
   async function requestTranscript(track) {
     const url = captions.makeTimedTextUrl(track.baseUrl);
-    const response = await chrome.runtime.sendMessage({ type: MESSAGE.FETCH_CAPTIONS, url });
+    const response = await chrome.runtime.sendMessage({
+      type: MESSAGE.FETCH_CAPTIONS,
+      url,
+      videoId: currentVideoId(),
+      languageCode: track.languageCode
+    });
     if (!response?.ok) {
       throw makeError(
         "CAPTION_FETCH_FAILED",
@@ -199,15 +204,17 @@
       );
     }
 
-    const cues = captions.parseTranscriptPayload(response.data.text);
+    const cues = Array.isArray(response.data.cues)
+      ? response.data.cues
+      : captions.parseTranscriptPayload(response.data.text);
     if (!cues.length) {
       throw makeError(
         "CAPTION_EMPTY",
-        "YouTube có track phụ đề nhưng không trả về nội dung. Endpoint timedtext có thể đã thay đổi."
+        "YouTube đang yêu cầu PO Token cho phụ đề. Hãy bật nút CC hoặc mở “Hiện bản chép lời” một lần, rồi bấm Thử lại."
       );
     }
 
-    return cues;
+    return { cues, source: response.data.source || "unknown" };
   }
 
   async function translateTranscript(cues, sourceLanguage, token) {
@@ -297,7 +304,8 @@
         );
       }
 
-      let cues = await requestTranscript(track);
+      const transcriptResult = await requestTranscript(track);
+      let cues = transcriptResult.cues;
       if (token !== navigationToken || videoId !== currentVideoId()) {
         return;
       }
@@ -326,6 +334,7 @@
         cueCount: cues.length,
         languageCode: shouldTranslate ? "vi" : track.languageCode,
         sourceLanguageCode,
+        captionSource: transcriptResult.source,
         translated: shouldTranslate,
         trackName: shouldTranslate ? `Bản dịch từ ${track.name}` : track.name,
         errorCode: "",
@@ -339,7 +348,8 @@
         track,
         cueCount: cues.length,
         firstCue: cues[0],
-        translated: shouldTranslate
+        translated: shouldTranslate,
+        captionSource: transcriptResult.source
       });
       if (settings.autoPlay) {
         controlPlayback("play").catch((error) => {

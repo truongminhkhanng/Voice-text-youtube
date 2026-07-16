@@ -31,6 +31,7 @@ Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lạ
 - Chọn giọng, tốc độ 0.5–2.0×, âm lượng và auto-play.
 - Lưu tùy chọn bằng `chrome.storage.sync`.
 - Cảnh báo rõ khi thiếu caption, endpoint timedtext lỗi hoặc máy không có giọng `vi-*`.
+- Khi YouTube yêu cầu PO Token, thử lại URL do player tạo và fallback sang panel **Hiện bản chép lời**.
 - Dịch tùy chọn qua Google Cloud Translation Basic v2 bằng API key riêng của người dùng.
 
 Floating control và đồng bộ chặt theo timeline video chưa nằm trong MVP này.
