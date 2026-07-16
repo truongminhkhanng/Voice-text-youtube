@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT Auto Translate + TTS (Vietnamese)",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Lấy phụ đề YouTube, dịch sang tiếng Việt và đọc bằng giọng có sẵn trên máy.",
   "permissions": [
     "storage",

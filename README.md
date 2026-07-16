@@ -33,6 +33,7 @@ Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lạ
 - Cảnh báo rõ khi thiếu caption, endpoint timedtext lỗi hoặc máy không có giọng `vi-*`.
 - Khi YouTube yêu cầu PO Token, thử lại URL do player tạo và fallback sang panel **Hiện bản chép lời**.
 - Dịch tùy chọn qua Google Cloud Translation Basic v2 bằng API key riêng của người dùng.
+- Tự nhận bản auto-translate tiếng Việt đang bật trong YouTube (`tlang=vi`) và đọc trực tiếp, không cần API key.
 
 Floating control và đồng bộ chặt theo timeline video chưa nằm trong MVP này.
 

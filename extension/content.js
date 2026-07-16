@@ -189,13 +189,14 @@
     return playerData;
   }
 
-  async function requestTranscript(track) {
+  async function requestTranscript(track, targetLanguageCode = "") {
     const url = captions.makeTimedTextUrl(track.baseUrl);
     const response = await chrome.runtime.sendMessage({
       type: MESSAGE.FETCH_CAPTIONS,
       url,
       videoId: currentVideoId(),
-      languageCode: track.languageCode
+      languageCode: track.languageCode,
+      targetLanguageCode
     });
     if (!response?.ok) {
       throw makeError(
@@ -214,7 +215,11 @@
       );
     }
 
-    return { cues, source: response.data.source || "unknown" };
+    return {
+      cues,
+      source: response.data.source || "unknown",
+      languageCode: response.data.languageCode || track.languageCode
+    };
   }
 
   async function translateTranscript(cues, sourceLanguage, token) {
@@ -304,15 +309,25 @@
         );
       }
 
-      const transcriptResult = await requestTranscript(track);
+      const activeYouTubeLanguageCode =
+        playerData.activeCaptionTranslationLanguageCode ||
+        (playerData.captionIsActive ? playerData.activeResourceLanguageCode : "");
+      const useYouTubeVietnamese = captions.isVietnamese(activeYouTubeLanguageCode);
+      const targetLanguageCode =
+        !captions.isVietnamese(track.languageCode) &&
+        (settings.translateToVietnamese || useYouTubeVietnamese)
+          ? "vi"
+          : "";
+      const transcriptResult = await requestTranscript(track, targetLanguageCode);
       let cues = transcriptResult.cues;
       if (token !== navigationToken || videoId !== currentVideoId()) {
         return;
       }
 
       const sourceLanguageCode = track.languageCode;
+      const captionLanguageCode = transcriptResult.languageCode || sourceLanguageCode;
       const shouldTranslate =
-        settings.translateToVietnamese && !captions.isVietnamese(sourceLanguageCode);
+        settings.translateToVietnamese && !captions.isVietnamese(captionLanguageCode);
       if (shouldTranslate) {
         cues = await translateTranscript(cues, sourceLanguageCode, token);
       }
@@ -323,7 +338,11 @@
       transcript = cues;
       ttsEngine.configure(settings);
       ttsEngine.setQueue(cues);
-      const needsTranslation = !captions.isVietnamese(track.languageCode) && !shouldTranslate;
+      const translatedByYouTube =
+        captions.isVietnamese(captionLanguageCode) &&
+        !captions.isVietnamese(sourceLanguageCode);
+      const finalLanguageCode = shouldTranslate ? "vi" : captionLanguageCode;
+      const needsTranslation = !captions.isVietnamese(finalLanguageCode);
       setState({
         phase: "ready",
         message: needsTranslation
@@ -332,11 +351,15 @@
         videoId,
         videoTitle: playerData.title || "",
         cueCount: cues.length,
-        languageCode: shouldTranslate ? "vi" : track.languageCode,
+        languageCode: finalLanguageCode,
         sourceLanguageCode,
         captionSource: transcriptResult.source,
-        translated: shouldTranslate,
-        trackName: shouldTranslate ? `Bản dịch từ ${track.name}` : track.name,
+        translated: shouldTranslate || translatedByYouTube,
+        trackName: shouldTranslate
+          ? `Bản dịch Google từ ${track.name}`
+          : translatedByYouTube
+            ? `Bản dịch YouTube từ ${track.name}`
+            : track.name,
         errorCode: "",
         playback: "stopped",
         currentIndex: 0,
@@ -348,7 +371,8 @@
         track,
         cueCount: cues.length,
         firstCue: cues[0],
-        translated: shouldTranslate,
+        translated: shouldTranslate || translatedByYouTube,
+        youtubeTranslationDetected: useYouTubeVietnamese,
         captionSource: transcriptResult.source
       });
       if (settings.autoPlay) {
