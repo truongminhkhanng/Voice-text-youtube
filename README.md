@@ -29,7 +29,7 @@ Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lạ
 - Chỉ đọc câu khi video chạm timestamp tương ứng; không tự đọc trước câu tiếp theo.
 - Tự pause theo video, bỏ câu cũ khi tua và cắt câu còn dở lúc phụ đề kế tiếp bắt đầu để luôn bám timeline.
 - Play, Pause/Resume và Stop (phát lại từ vị trí video hiện tại).
-- Chọn giọng, tốc độ 0.5–2.0×, âm lượng và auto-play.
+- Chọn giọng, tốc độ 0.5–4.0×, âm lượng và auto-play.
 - Lưu tùy chọn bằng `chrome.storage.sync`.
 - Cảnh báo rõ khi video không có caption hoặc máy không có giọng `vi-*`.
 - Chế độ tương thích không click CC, không mở menu, không đổi track và không quan sát/chặn request bằng `webRequest`.

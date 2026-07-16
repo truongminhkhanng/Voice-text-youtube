@@ -34,7 +34,7 @@
     return {
       enabled: typeof value.enabled === "boolean" ? value.enabled : DEFAULT_SETTINGS.enabled,
       voiceURI: typeof value.voiceURI === "string" ? value.voiceURI.slice(0, 500) : "",
-      rate: clamp(value.rate, 0.5, 2, DEFAULT_SETTINGS.rate),
+      rate: clamp(value.rate, 0.5, 4, DEFAULT_SETTINGS.rate),
       volume: clamp(value.volume, 0, 1, DEFAULT_SETTINGS.volume),
       autoPlay: typeof value.autoPlay === "boolean" ? value.autoPlay : DEFAULT_SETTINGS.autoPlay,
       preferVietnamese:

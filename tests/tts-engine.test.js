@@ -222,6 +222,31 @@ test("TtsEngine reads live YouTube captions only after they appear", () => {
   engine.stop();
 });
 
+test("TtsEngine supports speech rates up to 4x in synchronized modes", () => {
+  const synth = createSynth();
+  const video = createVideo();
+  let displayedCaption = "Đọc nhanh hơn";
+  const engine = new TtsEngine({
+    speechSynthesis: synth,
+    Utterance: FakeUtterance,
+    timelineIntervalMs: 60_000,
+    liveCaptionStableMs: 0
+  });
+  engine.configure({ rate: 4, volume: 0.8 });
+  engine.playLiveCaptions(video, { voiceURI: "vi", lang: "vi-VN" }, () => displayedCaption);
+
+  assert.equal(synth.spoken[0].rate, 4);
+  engine.stop();
+
+  displayedCaption = "";
+  video.playbackRate = 2;
+  engine.configure({ rate: 3, volume: 0.8 });
+  engine.setQueue([{ startMs: 0, durationMs: 1000, text: "Giữ giới hạn bốn lần" }]);
+  engine.playTimeline(video, { voiceURI: "vi", lang: "vi-VN" });
+  assert.equal(synth.spoken.at(-1).rate, 4, "video rate multiplication must cap at 4x");
+  engine.stop();
+});
+
 test("TtsEngine reads only appended words when live automatic captions grow", () => {
   const synth = createSynth();
   const video = createVideo();

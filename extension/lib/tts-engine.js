@@ -65,8 +65,10 @@
 
     configure(settings) {
       this.settings = {
-        rate: Number(settings?.rate) || 1,
-        volume: Number.isFinite(Number(settings?.volume)) ? Number(settings.volume) : 0.8
+        rate: clamp(Number(settings?.rate) || 1, 0.5, 4),
+        volume: Number.isFinite(Number(settings?.volume))
+          ? clamp(Number(settings.volume), 0, 1)
+          : 0.8
       };
     }
 
@@ -382,7 +384,7 @@
       const token = ++this.utteranceToken;
       const utterance = new this.Utterance(text);
       const videoRate = Number(this.video?.playbackRate) || 1;
-      utterance.rate = clamp(this.settings.rate * videoRate, 0.5, 2);
+      utterance.rate = clamp(this.settings.rate * videoRate, 0.5, 4);
       utterance.volume = this.settings.volume;
       if (this.voice) {
         utterance.voice = this.voice;
@@ -474,7 +476,7 @@
       const token = ++this.utteranceToken;
       const utterance = new this.Utterance(spokenCue.text);
       const videoRate = Number(this.video?.playbackRate) || 1;
-      utterance.rate = clamp(this.settings.rate * videoRate, 0.5, 2);
+      utterance.rate = clamp(this.settings.rate * videoRate, 0.5, 4);
       utterance.volume = this.settings.volume;
       if (this.voice) {
         utterance.voice = this.voice;
