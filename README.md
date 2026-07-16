@@ -1,79 +1,144 @@
-# YT Auto Translate + TTS (Vietnamese)
+# YouTube Subtitle to Vietnamese Speech
 
-Chrome Extension Manifest V3 lấy phụ đề của video YouTube, ưu tiên track tiếng Việt, dịch khi người dùng chủ động cấu hình và đọc đồng bộ theo timeline video bằng giọng Web Speech có sẵn trên máy.
+Tiện ích Chrome cá nhân giúp đọc phụ đề YouTube bằng giọng nói trên máy. Bản hiện tại ưu tiên phụ đề tiếng Việt đang hiển thị trực tiếp trên YouTube, đọc bám theo video và không can thiệp vào hệ thống phụ đề native của YouTube.
+
+Phiên bản hiện tại: **1.5.0**
+
+## Điểm chính
+
+- Đọc phụ đề tiếng Việt đang chạy trên video bằng Web Speech API.
+- Đọc đúng thời điểm phụ đề xuất hiện, không đọc trước câu tiếp theo.
+- Tự chờ khi video tạm dừng và bỏ câu cũ khi tua.
+- Điều khiển Phát, Dừng chờ và Dừng hoàn toàn.
+- Chọn giọng đọc, âm lượng và tốc độ từ **0.5× đến 4.0×**.
+- Theo dõi điều hướng video của YouTube mà không cần tải lại toàn bộ trang.
+- Có tùy chọn dịch bằng Google Cloud Translation với API key riêng.
+- Không phụ thuộc Read Frog hoặc bất kỳ extension nào khác.
+
+## Không xung đột với phụ đề YouTube
+
+Tiện ích hoạt động theo nguyên tắc **zero-touch**:
+
+- không tự click nút CC;
+- không mở menu phụ đề hoặc panel bản chép lời;
+- không đổi caption track bằng API nội bộ;
+- không gọi `setOption` hoặc `loadModule`;
+- không chặn `fetch`, `XMLHttpRequest` hoặc dùng quyền `webRequest`;
+- không gửi request `tlang=vi` riêng để ép YouTube dịch.
+
+YouTube hoàn toàn tự quản lý CC và bản dịch tự động. Ở chế độ native mặc định, tiện ích chỉ đọc trạng thái player và nội dung phụ đề tiếng Việt đang hiển thị. Chỉ khi người dùng chủ động bật chế độ Google, tiện ích mới tải caption nguồn và gửi nội dung cần dịch tới Google Cloud. Nếu YouTube chuyển khỏi tiếng Việt trong lúc đọc native, giọng đọc sẽ tự dừng để không đọc nhầm tiếng Anh bằng giọng Việt.
 
 ## Cài để sử dụng riêng trên Chrome
 
-1. Mở `chrome://extensions`.
-2. Bật **Developer mode**.
-3. Chọn **Load unpacked**.
-4. Chọn **thư mục gốc `Voice-text-youtube`** — chính là thư mục đang chứa file `manifest.json` này.
-5. Mở hoặc tải lại một trang video `youtube.com/watch?v=...`.
-6. Click icon extension, đợi trạng thái **Sẵn sàng**, rồi chọn **Phát**.
+### Cách 1: tải mã nguồn từ GitHub
 
-Bạn cũng có thể tạo một bản sạch chỉ chứa file cần cho Chrome:
+1. Chọn **Code → Download ZIP** trên GitHub.
+2. Giải nén file vừa tải.
+3. Mở `chrome://extensions`.
+4. Bật **Developer mode**.
+5. Chọn **Load unpacked / Tải tiện ích đã giải nén**.
+6. Chọn thư mục đã giải nén có file `manifest.json` ở ngay bên trong.
+7. Ghim icon **YT Auto Translate + TTS** lên thanh công cụ nếu cần.
+
+### Cách 2: clone repository
+
+```powershell
+git clone https://github.com/truongminhkhanng/Voice-text-youtube.git
+cd Voice-text-youtube
+```
+
+Sau đó dùng **Load unpacked / Tải tiện ích đã giải nén** và chọn thư mục `Voice-text-youtube`.
+
+### Tạo một thư mục đóng gói sạch
+
+Yêu cầu Node.js 20+:
 
 ```powershell
 npm run package:unpacked
 ```
 
-Sau đó chọn thư mục `release/YT-Auto-Translate-TTS-unpacked` trong **Load unpacked**. File ZIP bên cạnh dùng để lưu trữ hoặc chép sang máy khác; cần giải nén ZIP trước khi chọn trong Chrome.
+Lệnh này tạo:
 
-Sau mỗi lần sửa mã, bấm **Reload** trên thẻ extension và tải lại tab YouTube để content script mới được nạp.
+- `release/YT-Auto-Translate-TTS-unpacked`: thư mục dùng cho **Load unpacked / Tải tiện ích đã giải nén**;
+- `release/YT-Auto-Translate-TTS-v1.5.0.zip`: file lưu trữ hoặc chép sang máy khác.
 
-## Tính năng MVP
+Chrome không nạp trực tiếp file ZIP. Hãy giải nén ZIP trước khi dùng **Load unpacked / Tải tiện ích đã giải nén**.
 
-- Theo dõi điều hướng SPA của YouTube và tự nạp lại phụ đề cho video mới.
-- Đọc caption track từ player data trong main world, có fallback parser cho script trên trang.
-- Ưu tiên track tiếng Việt thủ công; fallback sang track gốc tốt nhất nếu không có.
-- Chỉ đọc câu khi video chạm timestamp tương ứng; không tự đọc trước câu tiếp theo.
-- Tự pause theo video, bỏ câu cũ khi tua và cắt câu còn dở lúc phụ đề kế tiếp bắt đầu để luôn bám timeline.
-- Play, Pause/Resume và Stop (phát lại từ vị trí video hiện tại).
-- Chọn giọng, tốc độ 0.5–4.0×, âm lượng và auto-play.
-- Lưu tùy chọn bằng `chrome.storage.sync`.
-- Cảnh báo rõ khi video không có caption hoặc máy không có giọng `vi-*`.
-- Chế độ tương thích không click CC, không mở menu, không đổi track và không quan sát/chặn request bằng `webRequest`.
-- Khi YouTube đang hiển thị bản dịch native tiếng Việt, đọc trực tiếp đúng dòng đang chạy mà không gửi thêm request caption.
-- Nếu YouTube chưa chọn tiếng Việt, hướng dẫn người dùng chọn **Phụ đề → Dịch tự động → Tiếng Việt**; không đọc nhầm dòng tiếng Anh bằng giọng Việt.
-- Dịch tùy chọn qua Google Cloud Translation Basic v2 bằng API key riêng của người dùng.
-- Không gửi request `tlang=vi` riêng và không cố điều khiển bản dịch native của YouTube.
-- Không gọi `setOption`, không thay caption track, không mở panel transcript và không click nút CC native.
-- Hoạt động độc lập, không đọc DOM, storage, API key hay mã của bất kỳ extension nào khác.
+## Cách sử dụng với video tiếng Anh
 
-Floating control chưa nằm trong phiên bản hiện tại.
+1. Mở video YouTube có phụ đề.
+2. Tự bật nút **CC** trên YouTube.
+3. Mở **Cài đặt ⚙ → Phụ đề → Dịch tự động → Tiếng Việt**.
+4. Chờ phụ đề tiếng Việt xuất hiện trên video.
+5. Mở popup của tiện ích.
+6. Nếu popup đang báo cần xử lý, bấm **Thử lại**.
+7. Chọn giọng đọc, tốc độ và âm lượng.
+8. Bấm **Phát**.
 
-## Dịch sang tiếng Việt
+Tiện ích không tự chọn mục **Dịch tự động → Tiếng Việt** vì thao tác đó từng làm phụ đề YouTube biến mất hoặc không dịch được. Việc để người dùng chọn trực tiếp giúp YouTube hoạt động ổn định hơn.
 
-Extension không có và không nhúng sẵn khóa dịch. Để bật dịch:
+## Điều khiển giọng đọc
 
-1. Tạo Google Cloud project, bật Cloud Translation API và billing.
-2. Tạo API key có restriction phù hợp.
-3. Mở **Cài đặt nâng cao** của extension.
-4. Nhập key, bấm **Lưu và thử dịch “Hello”**.
-5. Bật **Dịch sang tiếng Việt trước khi đọc**.
+- **Phát**: bắt đầu hoặc tiếp tục đọc tại vị trí hiện tại của video.
+- **Dừng chờ**: tạm dừng giọng đọc nhưng giữ trạng thái hiện tại.
+- **Dừng**: hủy câu đang đọc; lần sau sẽ đọc lại theo vị trí video.
+- **Tốc độ**: từ `0.5×` đến `4.0×`, bước nhảy `0.1×`.
+- **Âm lượng**: từ 0% đến 100%.
+- **Đọc tự động khi mở video**: tự phát khi Chrome cho phép autoplay, CC đã bật và phụ đề tiếng Việt đã được chọn/hiển thị.
 
-API key được lưu bằng `chrome.storage.local`, không đồng bộ qua tài khoản Chrome. Nội dung phụ đề chỉ được gửi tới Google khi tùy chọn dịch đang bật và video không có track tiếng Việt. Google Cloud Translation có quota và chi phí riêng.
+Tốc độ thực được tính bằng tốc độ trong tiện ích nhân với tốc độ phát video YouTube và luôn giới hạn tối đa ở `4.0×`. Một số giọng của Windows hoặc Chrome có thể không thể hiện đầy đủ khác biệt ở mức rất cao, dù tiện ích đã truyền đúng tốc độ đã chọn.
 
-## Giọng tiếng Việt
+## Dịch bằng Google Cloud — tùy chọn
 
-Danh sách giọng phụ thuộc hệ điều hành. Nếu `speechSynthesis.getVoices()` không trả về giọng có `lang` bắt đầu bằng `vi`, extension sẽ không tự chuyển sang giọng Anh. Người dùng có thể:
+Luồng khuyên dùng là bật bản dịch tiếng Việt trực tiếp trên YouTube. Nếu muốn tiện ích tự dịch caption nguồn mà không phụ thuộc bản dịch native, bạn có thể dùng Google Cloud Translation:
 
-- cài gói ngôn ngữ/giọng tiếng Việt của hệ điều hành; hoặc
-- tự chọn rõ ràng một giọng ngôn ngữ khác trong popup/options.
+1. Tạo Google Cloud project.
+2. Bật **Cloud Translation API** và billing.
+3. Tạo API key có restriction phù hợp.
+4. Mở **Cài đặt nâng cao** của tiện ích.
+5. Nhập key và bấm **Lưu và thử dịch “Hello”**.
+6. Bật **Dịch nếu YouTube chưa hiện tiếng Việt**.
 
-## Kiến trúc
+API key được lưu trong `chrome.storage.local` trên máy hiện tại và không đồng bộ qua tài khoản Chrome. Caption chỉ được gửi tới Google khi tùy chọn dịch đang bật. Google Cloud có quota và chi phí riêng.
 
-- `content.js`: lifecycle của video, caption, dịch và TTS DOM.
-- `background.js`: service worker điều phối tab, đọc player data ở MAIN world và chỉ tải caption nguồn khi người dùng chủ động bật dịch Google.
-- `popup.*`: điều khiển nhanh và trạng thái tab hiện tại.
-- `options.*`: cấu hình đầy đủ và API key cục bộ.
-- `lib/`: parser caption, hàng đợi TTS và chia lô dịch có thể unit test.
+## Cập nhật tiện ích
 
-Service worker không gọi `speechSynthesis`; TTS chỉ chạy trong content script.
+Sau khi tải hoặc pull phiên bản mới:
 
-## Kiểm thử
+1. Mở `chrome://extensions`.
+2. Tìm **YT Auto Translate + TTS**.
+3. Bấm **Reload** trên thẻ tiện ích.
+4. Tải lại tab YouTube đang mở.
 
-Yêu cầu Node.js 20+:
+Nếu trước đây đã nạp nhiều bản từ các thư mục khác nhau, hãy xóa hoặc tắt tất cả bản cũ và chỉ giữ một bản mới nhất. Hai bản cùng chạy có thể gây hành vi khó đoán.
+
+## Xử lý lỗi thường gặp
+
+### YouTube không dịch hoặc phụ đề biến mất
+
+- Kiểm tra tiện ích đang ở phiên bản `1.5.0` trở lên.
+- Xóa hoặc tắt mọi bản tiện ích cũ.
+- Khi chẩn đoán, tạm tắt Read Frog hoặc các extension phụ đề khác để loại trừ việc chúng cùng thay đổi YouTube.
+- Bấm **Reload** tiện ích và tải lại tab YouTube.
+- Chọn lại **Phụ đề → Dịch tự động → Tiếng Việt** bằng menu của YouTube.
+
+### Popup yêu cầu chọn tiếng Việt
+
+YouTube chưa xác nhận track đang hiển thị là tiếng Việt. Hãy bật CC, chọn **Dịch tự động → Tiếng Việt**, chờ phụ đề Việt xuất hiện rồi bấm **Thử lại**.
+
+### Tiện ích chỉ đọc tiếng Anh
+
+Với thiết lập mặc định, tiện ích sẽ không đọc live caption nếu player không xác nhận tiếng Việt. Hãy chắc chắn chỉ còn một bản extension đang hoạt động và bản dịch tiếng Việt thật sự đang hiển thị trước khi bấm **Phát**.
+
+### Không có giọng tiếng Việt
+
+Tiện ích ưu tiên giọng có mã `vi-*` và không âm thầm chuyển sang giọng Anh. Hãy cài gói ngôn ngữ/giọng tiếng Việt trong hệ điều hành hoặc chủ động chọn một giọng khác trong popup.
+
+### Đã sửa mã nhưng Chrome vẫn chạy bản cũ
+
+Bấm **Reload** tại `chrome://extensions`, sau đó tải lại tab YouTube. Content script cũ vẫn tồn tại trong tab cho đến khi trang được tải lại.
+
+## Kiểm thử và phát triển
 
 ```powershell
 npm test
@@ -81,32 +146,38 @@ npm run validate
 npm run smoke:youtube
 ```
 
-`smoke:youtube` cần Internet và kiểm tra một video công khai. Nếu YouTube chặn timedtext ngoài page context, test sẽ báo `inconclusive`; extension thật còn thử lại trong MAIN world và có chế độ đọc CC trực tiếp. Có thể truyền video ID khác bằng `node scripts/smoke-youtube.js VIDEO_ID`.
+- `npm test`: chạy unit test cho parser, cài đặt, dịch và đồng bộ TTS.
+- `npm run validate`: kiểm tra cả hai manifest, file tham chiếu, CSP và icon.
+- `npm run smoke:youtube`: thử endpoint caption của một video công khai.
 
-Tạo lại icon PNG:
+YouTube có thể trả timedtext rỗng cho bài smoke chạy ngoài page context. Khi đó kết quả `inconclusive` không đồng nghĩa extension đã lỗi; vẫn cần kiểm thử thủ công bằng Chrome với một video thật.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/generate-icons.ps1
-```
+## Cấu trúc chính
 
-Checklist thủ công quan trọng:
+- `manifest.json`: manifest dùng khi nạp trực tiếp thư mục repository.
+- `extension/content.js`: lifecycle video, đọc caption live và điều phối TTS.
+- `extension/background.js`: service worker, đọc player data và xử lý caption nguồn/dịch.
+- `extension/popup.*`: giao diện điều khiển nhanh.
+- `extension/options.*`: cài đặt nâng cao và Google API key.
+- `extension/lib/`: parser caption, bộ TTS và tiện ích dịch có unit test.
+- `tests/`: kiểm thử tự động.
+- `scripts/`: validate, smoke test và đóng gói bản unpacked.
 
-- video có phụ đề Việt thủ công;
-- video chỉ có phụ đề auto tiếng Anh;
-- video không có caption;
-- máy có/không có giọng Việt;
-- chuyển video bằng điều hướng SPA mà không refresh;
-- pause, resume, stop, tua video và phát lại đúng câu tại vị trí hiện tại;
-- API key dịch hợp lệ/không hợp lệ.
+## Quyền và quyền riêng tư
 
-## Giới hạn và quyền riêng tư
+Tiện ích dùng các quyền sau:
 
-YouTube không cung cấp public Caption API dành cho luồng này. Extension dựa vào player data và endpoint `timedtext` không chính thức, vì vậy có thể hỏng khi YouTube thay đổi cấu trúc và cần được bảo trì. Extension không mute video gốc. Web Speech không cho biết trước chính xác thời lượng đọc, nên một câu quá dài có thể bị cắt khi phụ đề kế tiếp bắt đầu để tránh làm giọng đọc trễ khỏi video.
+- `storage`: lưu cài đặt và API key.
+- `activeTab`: giao tiếp với tab YouTube đang hoạt động.
+- `scripting`: đọc player data trong MAIN world mà không thay đổi caption track.
+- host `youtube.com`: đọc dữ liệu caption của video.
+- host `translation.googleapis.com`: chỉ gọi khi người dùng chủ động bật dịch Google hoặc bấm thử dịch “Hello”.
 
-Các quyền được dùng:
+Tiện ích không đọc storage, API key hoặc mã nội bộ của extension khác; không mute và không tự thay đổi âm lượng video gốc.
 
-- `storage`: lưu tùy chọn và API key.
-- `activeTab`: điều khiển tab YouTube mà người dùng đang mở.
-- `scripting`: đọc player response trong MAIN world.
-- host YouTube: lấy caption.
-- `translation.googleapis.com`: chỉ gọi khi người dùng bật dịch.
+## Giới hạn
+
+- YouTube không cung cấp public Caption API cho luồng này; thay đổi nội bộ của YouTube có thể yêu cầu cập nhật tiện ích.
+- Web Speech API phụ thuộc giọng và khả năng của hệ điều hành.
+- Câu quá dài có thể bị cắt khi phụ đề tiếp theo xuất hiện để tránh giọng đọc chạy chậm hơn video.
+- Video không có caption sẽ không thể dùng chế độ đọc phụ đề.
